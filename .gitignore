@@ -1,0 +1,16 @@
+# Real business data (POs, customer lists, chats) - never upload
+reference/
+samples/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build output and tools
+node_modules/
+dist/
+.DS_Store
+.supabase/
+.claude/
+scratch/

@@ -1,0 +1,19 @@
+# Pokes the database every 3 days so the free Supabase project never pauses.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "41 3 */3 * *"   # 03:41 UTC (09:11 IST) every 3rd day
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          curl --fail-with-body -sS -X POST "$SUPABASE_URL/rest/v1/rpc/ping" \
+            -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json" -d '{}'

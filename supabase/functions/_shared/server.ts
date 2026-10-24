@@ -1,9 +1,10 @@
 // Helpers shared by the Edge Functions (server side only).
+// Emails go out as Atom Eats (atomeats.com), never as Atom Consulting.
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 
 export const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 export const SITE_URL = Deno.env.get('SITE_URL') ?? 'https://orders.atomeats.com'
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'Atom Eats Order Hub <orders@atomconsulting.in>'
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'Atom Eats Order Hub <orders@atomeats.com>'
 
 const ALLOWED_ORIGINS = [
   'https://orders.atomeats.com',
@@ -87,13 +88,13 @@ export function escapeHtml(s: string): string {
 
 /** Plain branded email wrapper. `bodyHtml` must already be escaped. */
 export function emailLayout(title: string, bodyHtml: string): string {
-  return `<!doctype html><html><body style="margin:0;background:#f6f6f6;font-family:Arial,Helvetica,sans-serif;color:#111">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f6f6;padding:24px 0"><tr><td align="center">
+  return `<!doctype html><html><body style="margin:0;background:#fff1d6;font-family:Poppins,Arial,Helvetica,sans-serif;color:#1f2547">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fff1d6;padding:24px 0"><tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#fff;border-radius:8px;overflow:hidden">
-<tr><td style="height:5px;background:#d97706"></td></tr>
+<tr><td style="background:#324298;padding:14px 32px"><img src="https://atomeats.com/cdn/shop/files/AtomEats_Logo.png?v=1729704984&width=200" alt="Atom Eats" height="44" style="display:block;background:#fff1d6;border-radius:6px;padding:4px 8px"></td></tr>
 <tr><td style="padding:24px 32px 28px;font-size:15px;line-height:1.6">
-<div style="font-weight:700;color:#92400e">Atom Eats Order Hub</div>
-<h2 style="font-size:19px;margin:12px 0 16px">${escapeHtml(title)}</h2>${bodyHtml}
+<div style="font-weight:700;color:#324298">Order Hub</div>
+<h2 style="font-size:19px;margin:12px 0 16px;color:#324298">${escapeHtml(title)}</h2>${bodyHtml}
 </td></tr>
 <tr><td style="padding:16px 32px;border-top:1px solid #eee;font-size:12px;color:#777">${escapeHtml(SITE_URL)}</td></tr>
 </table></td></tr></table></body></html>`

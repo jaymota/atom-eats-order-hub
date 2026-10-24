@@ -45,11 +45,11 @@ export default function Activity() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-bold text-stone-800">Activity</h2>
+        <h2 className="text-xl font-bold text-ae-blue">Activity</h2>
         {isAdmin(me?.role) && (
           <div className="flex rounded-lg border border-stone-300 bg-white p-1 text-sm font-semibold">
             {(['changes', 'logins'] as const).map((t) => (
-              <button key={t} type="button" onClick={() => setTab(t)} className={`rounded-md px-3 py-1.5 ${tab === t ? 'bg-amber-600 text-white' : 'text-stone-600'}`}>
+              <button key={t} type="button" onClick={() => setTab(t)} className={`rounded-md px-3 py-1.5 ${tab === t ? 'bg-ae-blue text-ae-cream' : 'text-stone-600'}`}>
                 {t === 'changes' ? 'Changes' : 'Logins'}
               </button>
             ))}
@@ -77,7 +77,7 @@ export default function Activity() {
               return (
                 <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm">
                   <Badge tone={k.tone}>{k.label}</Badge>
-                  <span className="font-semibold text-stone-800">{r.person?.name ?? (r.username_tried ? `“${r.username_tried}”` : '—')}</span>
+                  <span className="font-semibold text-ae-blue">{r.person?.name ?? (r.username_tried ? `“${r.username_tried}”` : '—')}</span>
                   <span className="text-xs text-stone-500">{istDateTime(r.at)} · {device(r.user_agent)} {r.ip}</span>
                 </li>
               )

@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+/* Atom Eats brand colours, taken from atomeats.com */
+@theme {
+  --color-ae-blue: #324298;
+  --color-ae-blue-dark: #26337a;
+  --color-ae-cream: #fff1d6;
+  --color-ae-yellow: #fff05c;
+  --color-ae-pink: #f6bbd5;
+  --color-ae-lilac: #be99d2;
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-ae-cream);
+}

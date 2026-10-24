@@ -26,7 +26,7 @@ function suggestUsername(name: string) {
 /** Shows a first PIN once, big, so the admin can pass it on. */
 function PinNotice({ name, pin, onClose }: { name: string; pin: string; onClose: () => void }) {
   return (
-    <Card className="border-amber-300 bg-amber-50">
+    <Card className="border-ae-blue/30 bg-ae-cream">
       <p className="text-sm text-stone-700">First PIN for <b>{name}</b>. Give it to them in person or by phone. It won’t be shown again.</p>
       <p className="my-3 text-center font-mono text-4xl font-bold tracking-[0.3em] text-stone-900">{pin}</p>
       <p className="mb-3 text-xs text-stone-600">They log in with their name and this PIN, then choose their own PIN straight away.</p>
@@ -199,7 +199,7 @@ export default function Team() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-bold text-stone-800">Team</h2>
+        <h2 className="text-xl font-bold text-ae-blue">Team</h2>
         {admin && !adding && <Button onClick={() => { setAdding(true); setPinShown(null) }}>+ Add a person</Button>}
       </div>
 
@@ -208,7 +208,7 @@ export default function Team() {
 
       {adding && (
         <Card>
-          <h3 className="mb-4 font-semibold text-stone-800">Add a person</h3>
+          <h3 className="mb-4 font-semibold text-ae-blue">Add a person</h3>
           <PersonForm
             initial={{}}
             roles={assignable}

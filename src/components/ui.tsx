@@ -4,8 +4,8 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAt
 type Tone = 'primary' | 'plain' | 'danger'
 
 const TONES: Record<Tone, string> = {
-  primary: 'bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-300',
-  plain: 'bg-white text-stone-800 border border-stone-300 hover:bg-stone-50 disabled:text-stone-400',
+  primary: 'bg-ae-blue text-ae-cream hover:bg-ae-blue-dark disabled:bg-ae-blue/40',
+  plain: 'bg-white text-stone-800 border border-stone-300 hover:bg-ae-cream/50 disabled:text-stone-400',
   danger: 'bg-white text-red-700 border border-red-300 hover:bg-red-50 disabled:text-red-300',
 }
 
@@ -29,7 +29,7 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   )
 }
 
-const inputCls = 'w-full min-h-12 rounded-lg border border-stone-300 bg-white px-3 text-base text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200'
+const inputCls = 'w-full min-h-12 rounded-lg border border-stone-300 bg-white px-3 text-base text-stone-900 focus:border-ae-blue focus:outline-none focus:ring-2 focus:ring-ae-blue/20'
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${inputCls} ${props.className ?? ''}`} />
@@ -71,6 +71,13 @@ export function OkBox({ children }: { children: ReactNode }) {
 }
 
 export function Badge({ children, tone = 'stone' }: { children: ReactNode; tone?: 'stone' | 'amber' | 'red' | 'green' }) {
-  const c = { stone: 'bg-stone-100 text-stone-700', amber: 'bg-amber-100 text-amber-800', red: 'bg-red-100 text-red-800', green: 'bg-green-100 text-green-800' }[tone]
+  const c = { stone: 'bg-stone-100 text-stone-700', amber: 'bg-ae-yellow text-ae-blue', red: 'bg-red-100 text-red-800', green: 'bg-green-100 text-green-800' }[tone]
   return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${c}`}>{children}</span>
+}
+
+// The Atom Eats logo, served from the atomeats.com Shopify store.
+const LOGO_URL = 'https://atomeats.com/cdn/shop/files/AtomEats_Logo.png?v=1729704984&width=320'
+
+export function Logo({ className = 'h-10' }: { className?: string }) {
+  return <img src={LOGO_URL} alt="Atom Eats" className={`w-auto ${className}`} />
 }

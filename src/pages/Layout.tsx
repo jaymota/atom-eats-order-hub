@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { Logo } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { ROLE_NAMES } from '../lib/format'
 
@@ -12,14 +13,17 @@ const LINKS = [
 export default function Layout() {
   const { me, signOut } = useAuth()
   return (
-    <div className="min-h-screen bg-stone-50">
-      <header className="border-b border-stone-200 bg-white">
+    <div className="min-h-screen bg-ae-cream">
+      <header className="border-b border-ae-blue/15 bg-ae-cream">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <div className="font-bold text-stone-800">Atom Eats Order Hub</div>
-            <div className="truncate text-xs text-stone-500">{me?.name} · {me && ROLE_NAMES[me.role]}</div>
+          <div className="flex min-w-0 items-center gap-3">
+            <Logo className="h-10 shrink-0" />
+            <div className="min-w-0">
+              <div className="font-bold text-ae-blue">Order Hub</div>
+              <div className="truncate text-xs text-stone-600">{me?.name} · {me && ROLE_NAMES[me.role]}</div>
+            </div>
           </div>
-          <button type="button" onClick={() => signOut('You have logged out.')} className="shrink-0 rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50">
+          <button type="button" onClick={() => signOut('You have logged out.')} className="shrink-0 rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold bg-white text-ae-blue hover:bg-ae-cream/50">
             Log out
           </button>
         </div>
@@ -30,7 +34,7 @@ export default function Layout() {
               to={l.to}
               end={l.end}
               className={({ isActive }) =>
-                `whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold ${isActive ? 'border-amber-600 text-amber-700' : 'border-transparent text-stone-600 hover:text-stone-900'}`
+                `whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold ${isActive ? 'border-ae-blue text-ae-blue' : 'border-transparent text-stone-600 hover:text-stone-900'}`
               }
             >
               {l.label}

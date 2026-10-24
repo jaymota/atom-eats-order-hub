@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Button, Card, ErrorBox, Field, Input, OkBox, PinInput } from '../components/ui'
+import { Button, Card, ErrorBox, Field, Input, Logo, OkBox, PinInput } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { callFn, supabase } from '../lib/supabase'
 
@@ -69,10 +69,11 @@ export default function Login({ onFirstPin }: { onFirstPin: (pin: string) => voi
   })
 
   return (
-    <main className="flex min-h-screen items-start justify-center bg-amber-50 px-4 pt-16 sm:items-center sm:pt-0">
+    <main className="flex min-h-screen items-start justify-center bg-ae-cream px-4 pt-16 sm:items-center sm:pt-0">
       <div className="w-full max-w-sm">
-        <h1 className="text-center text-2xl font-bold text-stone-800">Atom Eats Order Hub</h1>
-        <p className="mb-6 mt-1 text-center text-sm text-stone-500">For the Atom Eats team only</p>
+        <Logo className="mx-auto h-20" />
+        <h1 className="mt-3 text-center text-2xl font-bold text-ae-blue">Order Hub</h1>
+        <p className="mb-6 mt-1 text-center text-sm text-stone-600">For the Atom Eats team only</p>
         <Card>
           {mode === 'login' && (
             <form onSubmit={login} className="space-y-4">

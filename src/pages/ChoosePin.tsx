@@ -57,7 +57,7 @@ export default function ChoosePin({ firstPin, first }: { firstPin?: string; firs
   if (!first) {
     return (
       <div className="mx-auto max-w-sm space-y-4">
-        <h2 className="text-xl font-bold text-stone-800">My PIN</h2>
+        <h2 className="text-xl font-bold text-ae-blue">My PIN</h2>
         <Card>{form}</Card>
         <Card>
           <p className="mb-3 text-sm text-stone-600">Lost a phone, or logged in on someone else’s computer? This logs you out everywhere, including here.</p>
@@ -71,9 +71,9 @@ export default function ChoosePin({ firstPin, first }: { firstPin?: string; firs
   }
 
   return (
-    <main className="flex min-h-screen items-start justify-center bg-amber-50 px-4 pt-16 sm:items-center sm:pt-0">
+    <main className="flex min-h-screen items-start justify-center bg-ae-cream px-4 pt-16 sm:items-center sm:pt-0">
       <div className="w-full max-w-sm">
-        <h1 className="text-center text-2xl font-bold text-stone-800">Welcome, {me?.name}</h1>
+        <h1 className="text-center text-2xl font-bold text-ae-blue">Welcome, {me?.name}</h1>
         <p className="mb-6 mt-1 text-center text-sm text-stone-600">Please choose your own PIN. Only you will know it.</p>
         <Card>{form}</Card>
         <button type="button" onClick={() => signOut()} className="mt-4 w-full py-2 text-sm text-stone-600 underline">Cancel and log out</button>

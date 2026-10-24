@@ -9,16 +9,16 @@ export default function Home() {
   if (!me) return null
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold text-stone-800">Hello, {me.name.split(' ')[0]}</h2>
+      <h2 className="text-xl font-bold text-ae-blue">Hello, {me.name.split(' ')[0]}</h2>
       <Card>
         <div className="text-sm text-stone-500">Your role</div>
-        <div className="text-lg font-semibold text-stone-800">{ROLE_NAMES[me.role]}</div>
+        <div className="text-lg font-semibold text-ae-blue">{ROLE_NAMES[me.role]}</div>
         <p className="mt-1 text-sm text-stone-600">{ROLE_HELP[me.role]}</p>
       </Card>
-      <Card className="border-dashed bg-amber-50/50">
+      <Card className="border-dashed bg-ae-yellow/20">
         <p className="text-sm text-stone-700">
-          Orders, the order form and the to-do lists are being built next. For now you can see the <Link to="/team" className="font-semibold text-amber-700 underline">team</Link> and
-          the <Link to="/activity" className="font-semibold text-amber-700 underline">activity log</Link>.
+          Orders, the order form and the to-do lists are being built next. For now you can see the <Link to="/team" className="font-semibold text-ae-blue underline">team</Link> and
+          the <Link to="/activity" className="font-semibold text-ae-blue underline">activity log</Link>.
         </p>
       </Card>
     </div>

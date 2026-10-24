@@ -1,11 +1,41 @@
-// Phase 0 placeholder: proves the site is live at orders.atomeats.com.
+import { useState } from 'react'
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider, useAuth } from './lib/auth'
+import Activity from './pages/Activity'
+import ChoosePin from './pages/ChoosePin'
+import Home from './pages/Home'
+import Layout from './pages/Layout'
+import Login from './pages/Login'
+import Team from './pages/Team'
+
+function Gate() {
+  const { loading, session, me } = useAuth()
+  // The first PIN typed at login, kept in memory only, so they don't have to type it twice.
+  const [firstPin, setFirstPin] = useState('')
+
+  if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>
+  if (!session || !me) return <Login onFirstPin={setFirstPin} />
+  if (me.must_change_pin) return <ChoosePin first firstPin={firstPin || undefined} />
+
+  return (
+    <HashRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="team" element={<Team />} />
+          <Route path="activity" element={<Activity />} />
+          <Route path="my-pin" element={<ChoosePin first={false} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </HashRouter>
+  )
+}
+
 export default function App() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-amber-50 p-6">
-      <div className="max-w-md text-center">
-        <h1 className="text-3xl font-bold text-stone-800">Atom Eats Order Hub</h1>
-        <p className="mt-3 text-stone-600">Setting up. Login and orders are coming soon.</p>
-      </div>
-    </main>
+    <AuthProvider>
+      <Gate />
+    </AuthProvider>
   )
 }

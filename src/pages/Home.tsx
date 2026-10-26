@@ -1,4 +1,4 @@
-// Phase 1 home: a welcome and what this person's role can do. The order pipeline arrives in later phases.
+// Home for now: a welcome, the person's role, and the setup checks. The order pipeline arrives in later phases.
 import { Link } from 'react-router-dom'
 import { Card } from '../components/ui'
 import { useAuth } from '../lib/auth'
@@ -17,8 +17,9 @@ export default function Home() {
       </Card>
       <Card className="border-dashed bg-ae-yellow/20">
         <p className="text-sm text-stone-700">
-          Orders, the order form and the to-do lists are being built next. For now you can see the <Link to="/team" className="font-semibold text-ae-blue underline">team</Link> and
-          the <Link to="/activity" className="font-semibold text-ae-blue underline">activity log</Link>.
+          Orders, the order form and the to-do lists are being built next. For now you can look up <Link to="/products" className="font-semibold text-ae-blue underline">products</Link> and{' '}
+          <Link to="/customers" className="font-semibold text-ae-blue underline">customers</Link>, and admins can go through the{' '}
+          <Link to="/checks" className="font-semibold text-ae-blue underline">checks</Link> left by the import.
         </p>
       </Card>
     </div>

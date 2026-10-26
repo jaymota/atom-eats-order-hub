@@ -2,10 +2,13 @@ import { useState } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/auth'
 import Activity from './pages/Activity'
+import Checks from './pages/Checks'
+import Customers from './pages/Customers'
 import ChoosePin from './pages/ChoosePin'
 import Home from './pages/Home'
 import Layout from './pages/Layout'
 import Login from './pages/Login'
+import Products from './pages/Products'
 import Team from './pages/Team'
 
 function Gate() {
@@ -22,6 +25,9 @@ function Gate() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Home />} />
+          <Route path="products" element={<Products />} />
+          <Route path="customers" element={<Customers />} />
+          <Route path="checks" element={<Checks />} />
           <Route path="team" element={<Team />} />
           <Route path="activity" element={<Activity />} />
           <Route path="my-pin" element={<ChoosePin first={false} />} />

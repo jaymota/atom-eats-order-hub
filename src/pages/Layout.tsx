@@ -5,6 +5,9 @@ import { ROLE_NAMES } from '../lib/format'
 
 const LINKS = [
   { to: '/', label: 'Home', end: true },
+  { to: '/products', label: 'Products' },
+  { to: '/customers', label: 'Customers' },
+  { to: '/checks', label: 'Checks' },
   { to: '/team', label: 'Team' },
   { to: '/activity', label: 'Activity' },
   { to: '/my-pin', label: 'My PIN' },

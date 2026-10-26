@@ -19,6 +19,9 @@ export interface Product {
   is_retail: boolean
   replaced_by: string | null
   notes: string | null
+  in_easy_ecom: boolean
+  site_mrp: number | null      // price on atomeats.com at the last check
+  site_checked_at: string | null
 }
 
 export interface Alias {
@@ -69,7 +72,7 @@ let cache: Catalog | null = null
 export async function loadCatalog(force = false): Promise<Catalog> {
   if (cache && !force) return cache
   const [products, aliases] = await Promise.all([
-    fetchAll<Product>('products', 'sku, name, size, mrp, ee_type, gst_rate, hsn, ean, image_url, tally_name, tally_status, is_offline, is_retail, replaced_by, notes', (q) => q.order('name')),
+    fetchAll<Product>('products', 'sku, name, size, mrp, ee_type, gst_rate, hsn, ean, image_url, tally_name, tally_status, is_offline, is_retail, replaced_by, notes, in_easy_ecom, site_mrp, site_checked_at', (q) => q.order('name')),
     fetchAll<Alias>('product_aliases', 'id, sku, alias, alias_norm, kind, status, source, times_seen', (q) => q.neq('status', 'rejected')),
   ])
   const aliasesBySku = new Map<string, Alias[]>()

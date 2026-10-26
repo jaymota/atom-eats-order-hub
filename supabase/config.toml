@@ -419,3 +419,6 @@ verify_jwt = false
 
 [functions.team]
 verify_jwt = false
+
+[functions.site-prices]
+verify_jwt = false

@@ -295,8 +295,7 @@ say(`Combos: ${combos.size} combos/gift boxes with their contents (${comboRows.l
 const customers = new Map() // import_key -> record
 const byGstin = new Map(); const byName = new Map()
 const channelFor = (name, fallback) =>
-  /zomato|hyperpure|blinkit/i.test(name) ? 'Blinkit' : /foodstories|food stories/i.test(name) ? 'Foodstories'
-    : /landcraft|food ?square/i.test(name) ? 'Food Square' : fallback
+  /zomato|hyperpure|blinkit|swiggy|instamart/i.test(name) ? 'Quick Commerce' : /foodstories|food stories|landcraft|food ?square/i.test(name) ? 'Modern Retail' : fallback
 function findExisting(name, gstin) {
   // Same name = same customer. Same GSTIN with a different name (e.g. two Blinkit warehouses)
   // is left for an admin to decide on the duplicates screen.
@@ -325,7 +324,7 @@ function addCustomer(key, name, fields, address, aliasName) {
 }
 
 // Easy Ecom customer lists
-for (const [sh, fallback] of [['B2B Customers', 'B2B'], ['B2B FINAL', 'B2B'], ['Zomato', 'Blinkit'], ['Retail Customers', 'Retail (field sales)'], ['Copy of B2B Customers', 'B2B']]) {
+for (const [sh, fallback] of [['B2B Customers', 'B2B'], ['B2B FINAL', 'B2B'], ['Zomato', 'Quick Commerce'], ['Retail Customers', 'General Trade'], ['Copy of B2B Customers', 'B2B']]) {
   for (const r of sheet(templates, sh)) {
     const name = clean(r['Company Name'])
     if (!name || /^\d+$/.test(name)) continue
@@ -382,7 +381,7 @@ for (const sh of ['Form Responses 1', 'Ashish 1809 - 2609']) {
       gstin: clean(r.GST), fssai: /^\d{14}$/.test(digits(r.FSSAI)) && !/E\+/i.test(r.FSSAI) ? digits(r.FSSAI) : null,
       phone: phone10(r['CONTACT NUMBER']), billing_address: fix(r['Full Address']),
       billing_city: fix(r.CITY), default_margin: Number(String(r.Margin).replace('%', '')) || null,
-      default_channel: 'Retail (field sales)', source: 'old retail order form',
+      default_channel: 'General Trade', source: 'old retail order form',
     }, fix(r['Full Address']) ? { name, address: fix(r['Full Address']), city: fix(r.CITY) } : null, clean(raw))
     if (customers.size > before) retailNew++
   }

@@ -10,9 +10,11 @@ import {
 } from '../lib/orders'
 import { rupees } from '../lib/stages'
 import { supabase } from '../lib/supabase'
-import { CHANNELS } from '../pages/Customers'
+import { CHANNELS, CHANNEL_HINT } from '../lib/channels'
 import { ProductPicker } from '../pages/Checks'
+import AddProduct from './AddProduct'
 import { Button, Card, ErrorBox, Field, Input, Select } from './ui'
+import type { Product } from '../lib/catalog'
 
 const TERMS = ['advance', 'credit', 'COD', 'FOC']
 
@@ -20,7 +22,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
   const { catalog } = useCatalog()
   const navigate = useNavigate()
   const [people, setPeople] = useState<{ id: string; name: string }[]>([])
-  const [adding, setAdding] = useState(false)
+  const [adding, setAdding] = useState<false | 'pick' | 'new'>(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [warn, setWarn] = useState('')
@@ -69,6 +71,11 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
     }
   }
 
+  const addLine = (p: Product) => {
+    setDraft({ ...d, lines: [...d.lines, { key: newKey(), sku: p.sku, qty: null, typed_as: null, price_basis: d.channel === 'FOC' ? 'foc' : 'mrp_minus_margin', margin_pct: d.margin_pct, rate: null, learn: false }] })
+    setAdding(false)
+  }
+
   const sectionTitle = (t: string) => <h3 className="mb-3 font-semibold text-ae-blue">{t}</h3>
 
   const lineRows = useMemo(() => d.lines.map((l) => {
@@ -84,7 +91,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
           <Field label="Channel ✱">
             <Select {...inp('channel')}>
               <option value="">Choose…</option>
-              {CHANNELS.map((c) => <option key={c}>{c}</option>)}
+              {CHANNELS.map((c) => <option key={c} value={c}>{c} ({CHANNEL_HINT[c]})</option>)}
             </Select>
           </Field>
           <Field label="Order date ✱"><Input type="date" {...inp('order_date')} /></Field>
@@ -93,8 +100,8 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
               {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           </Field>
-          <Field label={`PO number${po ? ' ✱✱' : ''}`}><Input {...inp('po_number')} /></Field>
-          <Field label={`PO date${po ? ' ✱✱' : ''}`}><Input type="date" {...inp('po_date')} /></Field>
+          <Field label="Party’s PO number" hint={po ? 'If they sent one. Otherwise the Hub makes one (AE-PO-…).' : 'Leave empty: the Hub makes one (AE-PO-…).'}><Input {...inp('po_number')} /></Field>
+          <Field label="PO date" hint="Empty = the order date"><Input type="date" {...inp('po_date')} /></Field>
           <Field label="Needed by"><Input type="date" {...inp('needed_by')} /></Field>
         </div>
       </Card>
@@ -168,6 +175,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
                 <div className="min-w-0 text-sm">
                   <div className="font-semibold text-stone-900">{p ? productLabel(p) : l.sku}</div>
                   <div className="text-xs text-stone-500"><span className="font-mono">{l.sku}</span>{p?.tally_name && <> · Tally: {p.tally_name}</>}{l.typed_as && <> · message said “{l.typed_as}”</>}</div>
+                  {p && !p.in_easy_ecom && <div className="text-xs font-semibold text-red-700">Not in Easy Ecom yet: create it there before the evening upload.</div>}
                 </div>
                 <button type="button" className="text-sm font-semibold text-red-700 underline" onClick={() => setDraft({ ...d, lines: d.lines.filter((x) => x.key !== l.key) })}>Remove</button>
               </div>
@@ -193,14 +201,14 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
             </li>
           ))}
         </ul>
-        {adding ? (
-          <div className="mt-3"><ProductPicker onPick={(p) => {
-            setDraft({ ...d, lines: [...d.lines, { key: newKey(), sku: p.sku, qty: null, typed_as: null, price_basis: d.channel === 'FOC samples' ? 'foc' : 'mrp_minus_margin', margin_pct: d.margin_pct, rate: null, learn: false }] })
-            setAdding(false)
-          }} /></div>
-        ) : (
-          <Button tone="plain" className="mt-3" onClick={() => setAdding(true)}>+ Add a product</Button>
+        {adding === 'pick' && (
+          <div className="mt-3 space-y-2">
+            <ProductPicker onPick={addLine} />
+            <button type="button" className="text-sm font-semibold text-ae-blue underline" onClick={() => setAdding('new')}>Not in the list? Add a new product</button>
+          </div>
         )}
+        {adding === 'new' && <div className="mt-3"><AddProduct onCancel={() => setAdding(false)} onAdded={addLine} /></div>}
+        {!adding && <Button tone="plain" className="mt-3" onClick={() => setAdding('pick')}>+ Add a product</Button>}
         <div className="mt-3 text-right text-sm text-stone-700">Estimated value (incl. GST): <b className="text-lg text-stone-900">{rupees(total)}</b></div>
       </Card>
 

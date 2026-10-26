@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, ErrorBox, Input } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { productLabel, searchProducts, useCatalog, type Product } from '../lib/catalog'
-import { isAdmin } from '../lib/format'
+import { ago, isAdmin } from '../lib/format'
 import { gstinState, GST_STATES, nameSimilarity } from '../lib/match'
 import { supabase } from '../lib/supabase'
 import { CUSTOMER_COLS, type Customer } from './Customers'
 
-type Tab = 'duplicates' | 'nicknames' | 'tally'
+type Tab = 'duplicates' | 'nicknames' | 'tally' | 'prices'
 
 interface Pair { id: number; reason: string; score: number; a: Customer; b: Customer }
 
@@ -238,25 +238,88 @@ function TallyNames({ canEdit, onCount }: { canEdit: boolean; onCount: (n: numbe
   )
 }
 
+function Prices({ admin, onCount }: { admin: boolean; onCount: (n: number) => void }) {
+  const { catalog, reload } = useCatalog()
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const list = useMemo(() => (catalog?.products ?? [])
+    .filter((p) => p.site_mrp != null && p.site_mrp !== p.mrp)
+    .sort((a, b) => Number(b.is_offline) - Number(a.is_offline) || a.name.localeCompare(b.name)), [catalog])
+  useEffect(() => onCount(list.length), [list.length, onCount])
+  const last = (catalog?.products ?? []).map((p) => p.site_checked_at).filter(Boolean).sort().pop() ?? null
+
+  const accept = async (skus: string[]) => {
+    setError('')
+    setBusy('Saving…')
+    const { error: e } = await supabase.rpc('accept_site_prices', { p_skus: skus })
+    if (e) setError(e.message)
+    setBusy('')
+    await reload()
+  }
+  const checkNow = async () => {
+    setError('')
+    setBusy('Checking atomeats.com…')
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/site-prices`, {
+      method: 'POST', headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' }, body: '{}',
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) setError(body.error ?? 'The check didn’t work. Please try again.')
+    setBusy('')
+    await reload()
+  }
+
+  if (!catalog) return <p className="text-sm text-stone-500">Loading…</p>
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-stone-600">
+        The Hub checks the prices on atomeats.com every 6 hours. These products have a different price on the website than in the Hub.
+        The Hub’s MRP is what “MRP minus margin” uses on new orders. Prices never change by themselves: an admin decides here.
+        {last && <> Last checked {ago(last)}.</>}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button tone="plain" disabled={!!busy} onClick={checkNow}>{busy || 'Check the website now'}</Button>
+        {admin && list.length > 0 && <Button disabled={!!busy} onClick={() => confirm(`Use the website price for all ${list.length} products?`) && accept(list.map((p) => p.sku))}>Use the website price for all {list.length}</Button>}
+      </div>
+      <ErrorBox>{error}</ErrorBox>
+      {!list.length ? <p className="text-sm text-stone-600">Every price matches atomeats.com. 🎉</p> : (
+        <Card className="p-0 sm:p-0">
+          <ul className="divide-y divide-stone-100">
+            {list.map((p) => (
+              <li key={p.sku} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                <div className="min-w-0 text-sm">
+                  <div className="font-semibold text-stone-900">{p.name} {p.size && <span className="font-normal text-stone-500">· {p.size}</span>}</div>
+                  <div className="text-stone-700">Hub ₹{p.mrp ?? '—'} → website <b>₹{p.site_mrp}</b> <span className="font-mono text-xs text-stone-500">{p.sku}</span>{p.is_offline && <span className="ml-1"><Badge tone="green">offline SKU</Badge></span>}</div>
+                </div>
+                {admin && <Button className="min-h-10 px-3 text-sm" disabled={!!busy} onClick={() => accept([p.sku])}>Use ₹{p.site_mrp}</Button>}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 export default function Checks() {
   const { me } = useAuth()
   const admin = isAdmin(me?.role)
   const [tab, setTab] = useState<Tab>('duplicates')
-  const [counts, setCounts] = useState<Record<Tab, number | null>>({ duplicates: null, nicknames: null, tally: null })
+  const [counts, setCounts] = useState<Record<Tab, number | null>>({ duplicates: null, nicknames: null, tally: null, prices: null })
   const setCount = useCallback((t: Tab) => (n: number) => setCounts((c) => (c[t] === n ? c : { ...c, [t]: n })), [])
   const dupCount = useMemo(() => setCount('duplicates'), [setCount])
   const nickCount = useMemo(() => setCount('nicknames'), [setCount])
   const tallyCount = useMemo(() => setCount('tally'), [setCount])
+  const priceCount = useMemo(() => setCount('prices'), [setCount])
   // Counts for all three tabs straight away, not just the open one.
   useEffect(() => {
     Promise.all([
       supabase.from('customer_duplicates').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('product_aliases').select('id', { count: 'exact', head: true }).eq('status', 'suggested').eq('kind', 'nickname'),
       supabase.from('products').select('sku', { count: 'exact', head: true }).eq('is_offline', true).neq('tally_status', 'confirmed'),
-    ]).then(([d, n, t]) => setCounts((c) => ({ duplicates: c.duplicates ?? d.count, nicknames: c.nicknames ?? n.count, tally: c.tally ?? t.count })))
+    ]).then(([d, n, t]) => setCounts((c) => ({ ...c, duplicates: c.duplicates ?? d.count, nicknames: c.nicknames ?? n.count, tally: c.tally ?? t.count })))
   }, [])
 
-  const tabs: [Tab, string][] = [['duplicates', 'Duplicate customers'], ['nicknames', 'Nicknames'], ['tally', 'Tally names']]
+  const tabs: [Tab, string][] = [['duplicates', 'Duplicate customers'], ['nicknames', 'Nicknames'], ['tally', 'Tally names'], ['prices', 'Prices']]
   return (
     <div className="space-y-4">
       <div>
@@ -273,6 +336,7 @@ export default function Checks() {
       </div>
       {tab === 'duplicates' && <Duplicates admin={admin} onCount={dupCount} />}
       {tab === 'nicknames' && <Nicknames admin={admin} onCount={nickCount} />}
+      {tab === 'prices' && <Prices admin={admin} onCount={priceCount} />}
       {tab === 'tally' && <TallyNames canEdit={admin || me?.role === 'accounts'} onCount={tallyCount} />}
     </div>
   )

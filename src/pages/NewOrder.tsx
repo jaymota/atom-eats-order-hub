@@ -2,18 +2,19 @@
 // answer a few questions, check and save.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Badge, Button, Card, ErrorBox, Input, OkBox } from '../components/ui'
+import AddProduct from '../components/AddProduct'
 import OrderReview from '../components/OrderReview'
 import { useAuth } from '../lib/auth'
 import { loadCatalog, productLabel, searchProducts, useCatalog, type Catalog, type Product } from '../lib/catalog'
 import { nameSimilarity, norm, tidy } from '../lib/match'
 import {
-  MESSAGE_TEMPLATE, PO_CHANNELS, applyCustomer, emptyDraft, loadCustomersLite, newKey, splitAddress, stateFromGstin, type Draft, type DraftLine,
+  MESSAGE_TEMPLATE, applyCustomer, emptyDraft, loadCustomersLite, newKey, splitAddress, stateFromGstin, type Draft, type DraftLine,
 } from '../lib/orders'
 import { cleanOcr, readBarcodeRows, readMessage, type RawItem, type ReadMessage } from '../lib/parse'
 import { readExcel, readImage, readPdf, readScannedPdf } from '../lib/readers'
 import { guessCustomerNames, resolveCustomer, resolveItems, type CustomerGuess, type CustomerLite, type ResolvedItem } from '../lib/resolve'
 import { supabase } from '../lib/supabase'
-import { CHANNELS } from './Customers'
+import { CHANNELS, CHANNEL_HINT } from '../lib/channels'
 
 type Q =
   | { kind: 'customer' }
@@ -162,7 +163,9 @@ function ProductQuestion({ item, catalog, onAnswer }: { item: ResolvedItem; cata
   const [pick, setPick] = useState<string | null>(item.options[0]?.sku ?? null)
   const [qty, setQty] = useState<string>(item.qty != null ? String(item.qty) : '')
   const [q, setQ] = useState('')
+  const [adding, setAdding] = useState(false)
   const hits = useMemo(() => (q ? searchProducts(catalog, q, { limit: 6 }) : []), [catalog, q])
+  if (adding) return <AddProduct startName={q || item.raw.text} onCancel={() => setAdding(false)} onAdded={(p) => onAnswer(p.sku, qty ? Number(qty) : null)} />
   return (
     <div className="space-y-3">
       <p className="text-lg text-stone-800">The message says <b>“{item.raw.text}”</b>{item.qty != null && <> × <b>{item.qty}</b></>}. Which product is it?</p>
@@ -171,6 +174,7 @@ function ProductQuestion({ item, catalog, onAnswer }: { item: ResolvedItem; cata
         {hits.filter((h) => !item.options.some((o) => o.sku === h.sku)).map((p) => <ProductOption key={p.sku} p={p} chosen={pick === p.sku} onClick={() => setPick(p.sku)} />)}
       </div>
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Something else? Search…" />
+      <button type="button" className="text-sm font-semibold text-ae-blue underline" onClick={() => setAdding(true)}>Not in the list? Add a new product</button>
       <label className="block text-sm font-semibold text-stone-700">How many?
         <Input className="mt-1" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value.replace(/\D/g, ''))} placeholder="Number of packs" />
       </label>
@@ -323,12 +327,16 @@ function AddressQuestion({ read, draft, onAnswer }: { read: ReadMessage; draft: 
   )
 }
 
-function ChoiceQuestion({ title, choices, onAnswer }: { title: string; choices: string[]; onAnswer: (c: string) => void }) {
+function ChoiceQuestion({ title, choices, hints = {}, onAnswer }: { title: string; choices: readonly string[]; hints?: Record<string, string>; onAnswer: (c: string) => void }) {
   return (
     <div className="space-y-3">
       <p className="text-lg text-stone-800">{title}</p>
       <div className="grid gap-2 sm:grid-cols-2">
-        {choices.map((c) => <button key={c} type="button" className={`${BIG} border-stone-200 bg-white text-stone-800`} onClick={() => onAnswer(c)}>{c}</button>)}
+        {choices.map((c) => (
+          <button key={c} type="button" className={`${BIG} border-stone-200 bg-white text-stone-800`} onClick={() => onAnswer(c)}>
+            {c}{hints[c] && <div className="text-sm font-normal text-stone-500">{hints[c]}</div>}
+          </button>
+        ))}
       </div>
     </div>
   )
@@ -386,7 +394,7 @@ export default function NewOrder() {
   const [asked, setAsked] = useState(0)
   const [info, setInfo] = useState('')
 
-  const basis = (d: Draft) => (d.channel === 'FOC samples' ? 'foc' : d.margin_pct != null ? 'mrp_minus_margin' : null)
+  const basis = (d: Draft) => (d.channel === 'FOC' ? 'foc' : d.margin_pct != null ? 'mrp_minus_margin' : null)
 
   const start = async (text: string, files: File[], source: string, sheetItems?: PoItem[]) => {
     const cat = catalog ?? (await loadCatalog())
@@ -455,8 +463,8 @@ export default function NewOrder() {
       case 'qty': return d.lines.some((l) => !l.qty)
       case 'address': return !!an?.read && an.read.addressLines.size > 0
       case 'channel': return !d.channel
-      case 'margin': return !!an?.read && d.channel !== 'FOC samples' && d.lines.some((l) => !l.price_basis) && (d.margin_pct == null || an.read.margin != null)
-      case 'po': return PO_CHANNELS.includes(d.channel) && !d.po_number
+      case 'margin': return !!an?.read && d.channel !== 'FOC' && d.lines.some((l) => !l.price_basis) && (d.margin_pct == null || an.read.margin != null)
+      case 'po': return false // no PO from the party: the Hub makes its own PO number
       default: return true
     }
   }
@@ -552,7 +560,7 @@ export default function NewOrder() {
           }} />
         )}
         {q.kind === 'channel' && (
-          <ChoiceQuestion title="Which channel is this order for?" choices={CHANNELS} onAnswer={(c) => next({ ...draft, channel: c })} />
+          <ChoiceQuestion title="Which channel is this order for?" choices={CHANNELS} hints={CHANNEL_HINT} onAnswer={(c) => next({ ...draft, channel: c })} />
         )}
         {q.kind === 'margin' && (
           <MarginQuestion found={an.read?.margin ?? draft.margin_pct} onAnswer={(m) => {

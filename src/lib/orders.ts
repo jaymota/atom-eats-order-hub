@@ -6,7 +6,8 @@ import { compressImage } from './readers'
 import type { CustomerLite } from './resolve'
 import { supabase } from './supabase'
 
-export const PO_CHANNELS = ['Blinkit', 'Foodstories', 'Food Square', 'Other retail chains / corporates']
+// Channels where the party usually sends a PO (without one, the Hub makes its own PO number).
+export const PO_CHANNELS = ['Modern Retail', 'Quick Commerce']
 export const PAYMENT_TYPES = ['Prepaid', 'Credit', 'COD', 'Cheque', 'FOC'] as const
 export const COURIERS = ['DTDC', 'Porter', 'Customer pickup', 'Other']
 
@@ -110,9 +111,6 @@ export function mustHave(d: Draft): string[] {
 /** ✱✱ details: needed before the order can be planned for dispatch (same rules as the database). */
 export function stillMissing(d: Draft): string[] {
   const m: string[] = []
-  const po = PO_CHANNELS.includes(d.channel)
-  if (po && !d.po_number.trim()) m.push('PO number')
-  if (po && !d.po_date) m.push('PO date')
   if (!d.gst_status) m.push('GST status')
   if (d.gst_status === 'registered' && !d.gstin.trim()) m.push('GSTIN')
   if (!d.billing_address.trim()) m.push('billing address')

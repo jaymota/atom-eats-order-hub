@@ -2,12 +2,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, ErrorBox, Field, Input, OkBox, Select } from '../components/ui'
 import { fetchAll } from '../lib/catalog'
+import { CHANNELS } from '../lib/channels'
 import { GST_STATES, gstinState, nameSimilarity, norm } from '../lib/match'
 import { supabase } from '../lib/supabase'
 
-export const CHANNELS = [
-  'Blinkit', 'Foodstories', 'Food Square', 'Other retail chains / corporates', 'Retail (field sales)', 'B2B', 'Gifting', 'Custom', 'FOC samples',
-]
+export { CHANNELS } from '../lib/channels'
 const TERMS = ['advance', 'credit', 'COD', 'FOC']
 
 export interface Customer {

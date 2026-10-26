@@ -20,7 +20,7 @@ interface Order {
   delivery_gstin: string | null; delivery_contact: string | null; delivery_phone: string | null; po_number: string | null; po_date: string | null
   needed_by: string | null; payment_type: string | null; courier_pref: string | null; notes: string | null; source: string; source_text: string | null
   estimate_value: number; missing: string[]; invoice_no: string | null; invoice_date: string | null; invoice_value: number | null
-  dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
+  po_generated: boolean; dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
 }
 interface Line { id: string; sku: string; qty: number; price_basis: PriceBasis | null; margin_pct: number | null; rate: number | null; value: number; product_name: string | null; mrp: number | null; tally_name: string | null; typed_as: string | null }
 interface FileRow { id: string; path: string; kind: string; name: string | null; created_at: string }
@@ -183,7 +183,7 @@ export default function OrderPage() {
           <dl className="grid gap-2 text-sm">
             {field('Deliver to', deliverTo.filter(Boolean).join(', '))}
             {(o.delivery_contact || o.delivery_phone) && field('Delivery contact', [o.delivery_contact, o.delivery_phone].filter(Boolean).join(' · '))}
-            {field('PO', o.po_number ? `${o.po_number}${o.po_date ? ` (${o.po_date})` : ''}` : ['Blinkit', 'Foodstories', 'Food Square', 'Other retail chains / corporates'].includes(o.channel) ? null : 'no PO')}
+            {field('PO', o.po_number ? `${o.po_number}${o.po_date ? ` (${o.po_date})` : ''}${o.po_generated ? ' · made by the Hub (no PO from the party)' : ''}` : null)}
             {field('Payment type', o.payment_type)}
             {o.needed_by && field('Needed by', o.needed_by)}
             {o.courier_pref && field('Preferred courier', o.courier_pref)}

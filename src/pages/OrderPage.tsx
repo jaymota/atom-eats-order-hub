@@ -1,5 +1,5 @@
 // Everything about one order on one page: items, addresses, files, who did what, notes.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge, Button, Card, ErrorBox, Input, OkBox } from '../components/ui'
 import OrderReview from '../components/OrderReview'
@@ -7,9 +7,11 @@ import { useAuth } from '../lib/auth'
 import { istDateTime } from '../lib/format'
 import { BASIS_LABEL, loadDraft, type Draft, type PriceBasis } from '../lib/orders'
 import { compressImage } from '../lib/readers'
-import { age, isLate, rupees, type Stage } from '../lib/stages'
+import { age, can, isLate, notify, rupees, todayIST, attachFile, type Stage } from '../lib/stages'
 import { supabase } from '../lib/supabase'
+import { todoChanged } from '../lib/todo'
 import { StageBadge } from './Orders'
+import { DispatchFields, InvoiceFields, blankDisp, blankInv, dispReady, invReady, saveDispatches, saveInvoices, usePeople } from './Todo'
 
 interface Order {
   id: string; order_no: string; stage: Stage; channel: string; order_date: string; received_at: string; salesperson_id: string | null
@@ -21,6 +23,7 @@ interface Order {
   needed_by: string | null; payment_type: string | null; courier_pref: string | null; notes: string | null; source: string; source_text: string | null
   estimate_value: number; missing: string[]; invoice_no: string | null; invoice_date: string | null; invoice_value: number | null
   po_generated: boolean; dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
+  shared_with: string | null; planned_by: string | null; boxes: number | null; dispatch_note: string | null; delivered_at: string | null; split_from: string | null
 }
 interface Line { id: string; sku: string; qty: number; price_basis: PriceBasis | null; margin_pct: number | null; rate: number | null; value: number; product_name: string | null; mrp: number | null; tally_name: string | null; typed_as: string | null }
 interface FileRow { id: string; path: string; kind: string; name: string | null; created_at: string }
@@ -45,6 +48,7 @@ export default function OrderPage() {
   const [showMsg, setShowMsg] = useState(false)
   const [savedMsg, setSavedMsg] = useState(loc.state?.saved ? `Order ${loc.state.saved} saved.` : '')
   const [error, setError] = useState('')
+  const [notFound, setNotFound] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -57,8 +61,9 @@ export default function OrderPage() {
       supabase.from('order_notes').select('id, body, created_at, person:people(name)').eq('order_id', id).order('created_at'),
       supabase.from('people').select('id, name'),
     ])
-    if (ord.error) { setError('Order not found.'); return }
+    if (ord.error) { setNotFound(true); return }
     setO(ord.data as Order)
+    todoChanged()
     setLines((ls.data ?? []) as Line[])
     const fr = (fs.data ?? []) as FileRow[]
     const signed = fr.length ? (await supabase.storage.from('order-files').createSignedUrls(fr.map((f) => f.path), 3600)).data ?? [] : []
@@ -69,7 +74,7 @@ export default function OrderPage() {
   }, [id])
   useEffect(() => { load() }, [load])
 
-  if (error) return <ErrorBox>{error}</ErrorBox>
+  if (notFound) return <ErrorBox>Order not found.</ErrorBox>
   if (!o) return <p className="text-sm text-stone-500">Loading…</p>
 
   if (edit) {
@@ -127,7 +132,7 @@ export default function OrderPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {canEdit && <Button tone="plain" onClick={async () => setEdit(await loadDraft(o.id))}>Edit</Button>}
-          {canHold && o.stage !== 'cancelled' && (o.stage === 'on_hold'
+          {canHold && !['cancelled', 'dispatched', 'delivered'].includes(o.stage) && (o.stage === 'on_hold'
             ? <Button tone="plain" onClick={() => hold('resume')}>Take off hold</Button>
             : <Button tone="plain" onClick={() => hold('hold')}>Put on hold</Button>)}
           {canHold && !['cancelled', 'dispatched', 'delivered'].includes(o.stage) && <Button tone="danger" onClick={() => hold('cancel')}>Cancel order</Button>}
@@ -142,6 +147,20 @@ export default function OrderPage() {
       {o.stage === 'on_hold' && o.hold_reason && <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm">On hold: {o.hold_reason}</p>}
       {o.stage === 'cancelled' && o.cancel_reason && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Cancelled: {o.cancel_reason}</p>}
       <ErrorBox>{error}</ErrorBox>
+      <NextStep key={o.stage} o={o} lines={lines} role={me?.role} onDone={(m) => { setSavedMsg(m); setError(''); load() }} onError={setError} />
+
+      {o.invoice_no && (
+        <Card>
+          <h3 className="mb-2 font-semibold text-ae-blue">Invoice and dispatch</h3>
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            {field('Invoice', `${o.invoice_no} · ${o.invoice_date ?? ''} · ${rupees(o.invoice_value)}`)}
+            {field('Shared with', people.get(o.shared_with ?? '') ?? null)}
+            {o.dispatch_date && field('Dispatched', [o.dispatch_date, o.courier, o.tracking_no, o.boxes ? `${o.boxes} box${o.boxes === 1 ? '' : 'es'}` : null].filter(Boolean).join(' · '))}
+            {o.dispatch_note && field('Dispatch note', o.dispatch_note)}
+            {o.delivered_at && field('Delivered', istDateTime(o.delivered_at))}
+          </dl>
+        </Card>
+      )}
 
       <Card>
         <h3 className="mb-2 font-semibold text-ae-blue">Products</h3>
@@ -239,5 +258,91 @@ export default function OrderPage() {
       </div>
       <div className="pb-6"><button type="button" className="text-sm text-stone-500 underline" onClick={() => navigate('/orders/new')}>Enter another order</button></div>
     </div>
+  )
+}
+
+// ---------- The next step for this order, depending on its stage and who is looking ----------
+function NextStep({ o, lines, role, onDone, onError }: { o: Order; lines: Line[]; role?: string; onDone: (msg: string) => void; onError: (e: string) => void }) {
+  const people = usePeople()
+  const [inv, setInv] = useState(() => blankInv(o))
+  const [disp, setDisp] = useState(() => ({ ...blankDisp(o), on: true }))
+  const [date, setDate] = useState(todayIST())
+  const [split, setSplit] = useState<Record<string, number> | null>(null)
+  const [busy, setBusy] = useState(false)
+  const proofRef = useRef<HTMLInputElement>(null)
+
+  const run = async (fn: () => Promise<string>) => {
+    setBusy(true)
+    try { onDone(await fn()) } catch (e) { onError((e as Error).message) }
+    setBusy(false)
+  }
+  const rpc = async (name: string, args: Record<string, unknown>) => {
+    const { data, error } = await supabase.rpc(name, args)
+    if (error) throw new Error(error.message)
+    return data
+  }
+  const undo = () => run(async () => { await rpc('undo_stage', { p_order: o.id }); return 'Moved back one step.' })
+  const canSplit = can.plan(role) && ['new', 'planned', 'on_hold'].includes(o.stage) && lines.some((l) => l.qty > 1 || lines.length > 1)
+
+  let body: ReactNode = null
+  if (o.stage === 'new' && can.plan(role)) {
+    body = <Button disabled={busy || o.missing.length > 0} onClick={() => run(async () => { await rpc('plan_orders', { p_ids: [o.id] }); notify('planned', [o.id]); return 'Sent to accounts.' })}>Plan → accounts</Button>
+  } else if (o.stage === 'planned' && can.invoice(role)) {
+    body = (
+      <div className="space-y-2">
+        <InvoiceFields v={inv} set={setInv} people={people} />
+        <Button disabled={busy || !invReady(inv)} onClick={() => run(async () => { await saveInvoices([[o.id, inv]]); return 'Invoice saved.' })}>Save invoice</Button>
+      </div>
+    )
+  } else if (o.stage === 'invoiced' && can.dispatch(role)) {
+    body = (
+      <div className="space-y-2">
+        <Input type="date" className="max-w-44" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Dispatch date" />
+        <DispatchFields v={disp} set={setDisp} />
+        <Button disabled={busy || !dispReady(disp)} onClick={() => run(async () => { await saveDispatches(date, [[o.id, disp]]); return 'Dispatched.' })}>Dispatched</Button>
+      </div>
+    )
+  } else if (o.stage === 'dispatched' && can.dispatch(role)) {
+    body = (
+      <>
+        <Button disabled={busy} onClick={() => run(async () => { await rpc('mark_delivered', { p_ids: [o.id] }); return 'Delivered.' })}>Delivered</Button>
+        <Button tone="plain" className="ml-2" disabled={busy} onClick={() => proofRef.current?.click()}>📎 Proof / GRN</Button>
+        <input ref={proofRef} type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run(async () => { await attachFile(o.id, f, 'grn'); return 'File added.' }) }} />
+      </>
+    )
+  }
+  const mayUndo = (o.stage === 'planned' && can.plan(role)) || (o.stage === 'invoiced' && can.invoice(role)) || (o.stage === 'dispatched' && (role === 'admin' || role === 'super_admin'))
+  if (!body && !mayUndo && !canSplit) return null
+
+  return (
+    <Card className="border-ae-blue/30 bg-ae-cream/40">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="font-semibold text-ae-blue">Next step</h3>
+        <div className="flex gap-3 text-sm">
+          {canSplit && <button type="button" className="font-semibold text-ae-blue underline" onClick={() => setSplit(split ? null : Object.fromEntries(lines.map((l) => [l.id, l.qty])))}>Split</button>}
+          {mayUndo && <button type="button" className="text-stone-500 underline" disabled={busy} onClick={undo}>Undo last step</button>}
+        </div>
+      </div>
+      {split ? (
+        <div className="space-y-2">
+          <p className="text-sm text-stone-600">Qty going now. The rest becomes a new order.</p>
+          {lines.map((l) => (
+            <div key={l.id} className="flex items-center justify-between gap-2 text-sm">
+              <span className="min-w-0 flex-1">{l.product_name} <span className="text-stone-400">of {l.qty}</span></span>
+              <Input inputMode="numeric" className="max-w-20" onFocus={(e) => e.target.select()} value={String(split[l.id])} onChange={(e) => setSplit({ ...split, [l.id]: Math.min(l.qty, Number(e.target.value.replace(/\D/g, '')) || 0) })} />
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <Button disabled={busy} onClick={() => run(async () => {
+              const id = await rpc('split_order', { p_order: o.id, p_send: Object.entries(split).map(([line_id, qty]) => ({ line_id, qty })) })
+              setSplit(null)
+              const { data } = await supabase.from('orders').select('order_no').eq('id', id).single()
+              return `Split. The rest is ${data?.order_no}.`
+            })}>Split</Button>
+            <Button tone="plain" onClick={() => setSplit(null)}>Back</Button>
+          </div>
+        </div>
+      ) : body}
+    </Card>
   )
 }

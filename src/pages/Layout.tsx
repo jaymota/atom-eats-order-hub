@@ -2,11 +2,19 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { Logo } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { ROLE_NAMES } from '../lib/format'
+import { useTodoCounts, type TodoCounts } from '../lib/todo'
 
-const LINKS = [
+type L = { to: string; label: string; end?: boolean; count?: keyof TodoCounts; roles?: string[] }
+const OPS = ['super_admin', 'admin', 'ops']
+const ACC = ['super_admin', 'admin', 'accounts']
+const LINKS: L[] = [
   { to: '/', label: 'Home', end: true },
   { to: '/orders/new', label: '+ New order', end: true },
+  { to: '/plan', label: 'Plan', count: 'plan', roles: OPS },
+  { to: '/invoice', label: 'Invoice', count: 'invoice', roles: ACC },
+  { to: '/dispatch', label: 'Dispatch', count: 'dispatch', roles: OPS },
   { to: '/orders', label: 'Orders', end: true },
+  { to: '/invoices', label: 'Invoices', roles: ACC },
   { to: '/products', label: 'Products' },
   { to: '/customers', label: 'Customers' },
   { to: '/checks', label: 'Checks' },
@@ -17,6 +25,7 @@ const LINKS = [
 
 export default function Layout() {
   const { me, signOut } = useAuth()
+  const counts = useTodoCounts()
   return (
     <div className="min-h-screen bg-ae-cream">
       <header className="border-b border-ae-blue/15 bg-ae-cream">
@@ -33,7 +42,7 @@ export default function Layout() {
           </button>
         </div>
         <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-2">
-          {LINKS.map((l) => (
+          {LINKS.filter((l) => !l.roles || l.roles.includes(me?.role ?? '')).map((l) => (
             <NavLink
               key={l.to}
               to={l.to}
@@ -43,6 +52,7 @@ export default function Layout() {
               }
             >
               {l.label}
+              {l.count && counts && counts[l.count] > 0 && <span className="ml-1.5 rounded-full bg-ae-blue px-1.5 py-0.5 text-xs text-ae-cream">{counts[l.count]}</span>}
             </NavLink>
           ))}
         </nav>

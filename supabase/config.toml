@@ -422,3 +422,6 @@ verify_jwt = false
 
 [functions.site-prices]
 verify_jwt = false
+
+[functions.notify]
+verify_jwt = false

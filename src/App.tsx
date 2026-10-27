@@ -6,6 +6,7 @@ import Checks from './pages/Checks'
 import Customers from './pages/Customers'
 import ChoosePin from './pages/ChoosePin'
 import Home from './pages/Home'
+import Invoices from './pages/Invoices'
 import Layout from './pages/Layout'
 import Login from './pages/Login'
 import NewOrder from './pages/NewOrder'
@@ -13,6 +14,7 @@ import OrderPage from './pages/OrderPage'
 import Orders from './pages/Orders'
 import Products from './pages/Products'
 import Team from './pages/Team'
+import { DispatchPage, InvoicePage, PlanPage } from './pages/Todo'
 
 function Gate() {
   const { loading, session, me } = useAuth()
@@ -31,6 +33,10 @@ function Gate() {
           <Route path="orders" element={<Orders />} />
           <Route path="orders/new" element={<NewOrder />} />
           <Route path="orders/:id" element={<OrderPage />} />
+          <Route path="plan" element={<PlanPage />} />
+          <Route path="invoice" element={<InvoicePage />} />
+          <Route path="dispatch" element={<DispatchPage />} />
+          <Route path="invoices" element={<Invoices />} />
           <Route path="products" element={<Products />} />
           <Route path="customers" element={<Customers />} />
           <Route path="checks" element={<Checks />} />

@@ -35,3 +35,34 @@ export function age(receivedAt: string): string {
 
 export const rupees = (n: number | null | undefined) =>
   n == null ? '—' : `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+
+export const COURIERS = ['DTDC', 'Porter', 'Customer pickup', 'Other'] as const
+
+/** Who may do what (the database checks this too). */
+export const can = {
+  plan: (r?: string) => ['super_admin', 'admin', 'ops'].includes(r ?? ''),
+  invoice: (r?: string) => ['super_admin', 'admin', 'accounts'].includes(r ?? ''),
+  dispatch: (r?: string) => ['super_admin', 'admin', 'ops'].includes(r ?? ''),
+}
+
+/** Today in India, as yyyy-mm-dd. */
+export const todayIST = () => new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
+
+/** Puts a file in the order's folder and records it. */
+export async function attachFile(orderId: string, file: Blob & { name?: string }, kind: string) {
+  const { supabase } = await import('./supabase')
+  const name = (file.name ?? 'file').replace(/[^\w.-]+/g, '-').slice(0, 50)
+  const path = `${orderId}/${Date.now()}-${name}`
+  const up = await supabase.storage.from('order-files').upload(path, file, { contentType: file.type || undefined })
+  if (up.error) throw new Error(up.error.message)
+  const { error } = await supabase.rpc('add_order_file', { p_order: orderId, p_path: path, p_kind: kind, p_name: file.name ?? name, p_size: file.size })
+  if (error) throw new Error(error.message)
+}
+
+/** Sends the hand-off email. Never blocks the work if email isn't set up. */
+export async function notify(kind: 'planned' | 'invoiced' | 'dispatched', ids: string[]) {
+  try {
+    const { callFn } = await import('./supabase')
+    await callFn('notify', { kind, ids })
+  } catch { /* email is a nice-to-have */ }
+}

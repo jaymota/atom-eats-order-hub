@@ -71,7 +71,7 @@ function InputStep({ onRead, onBlank }: { onRead: (text: string, files: File[], 
         parts.push(cleanOcr(r.text))
       }
       setBusy('')
-      if (low) setError('Parts of the picture were hard to read (handwriting?). Check the answers carefully, or use “Start blank”.')
+      if (low) setError('Hard to read. Check carefully, or use Custom.')
       onRead(parts.join('\n\n'), files, 'screenshot')
     } catch (e) {
       setBusy('')
@@ -100,18 +100,16 @@ function InputStep({ onRead, onBlank }: { onRead: (text: string, files: File[], 
   }
 
   if (busy) {
-    return <Card className="py-10 text-center"><p className="text-lg font-semibold text-ae-blue">{busy}</p><p className="mt-2 text-sm text-stone-500">This happens on your phone or computer, nothing is sent anywhere.</p></Card>
+    return <Card className="py-10 text-center"><p className="text-lg font-semibold text-ae-blue">{busy}</p></Card>
   }
 
   if (mode === 'paste') {
     return (
       <Card className="space-y-3">
-        <h3 className="font-semibold text-ae-blue">Paste the WhatsApp message</h3>
-        <p className="text-sm text-stone-600">Paste it exactly as you got it. Several messages together are fine (items in one, address in another).</p>
-        <textarea className="min-h-64 w-full rounded-lg border border-stone-300 bg-white p-3 text-base focus:border-ae-blue focus:outline-none" value={text} onChange={(e) => setText(e.target.value)} autoFocus placeholder="Paste here…" />
+        <textarea className="min-h-64 w-full rounded-lg border border-stone-300 bg-white p-3 text-base focus:border-ae-blue focus:outline-none" value={text} onChange={(e) => setText(e.target.value)} autoFocus placeholder="Paste the WhatsApp message" />
         <div className="flex gap-2">
           <Button tone="plain" onClick={() => setMode('pick')}>Back</Button>
-          <Button className="flex-1" disabled={!text.trim()} onClick={() => onRead(text, [], 'paste')}>Read the message</Button>
+          <Button className="flex-1" disabled={!text.trim()} onClick={() => onRead(text, [], 'paste')}>Next</Button>
         </div>
       </Card>
     )
@@ -120,26 +118,26 @@ function InputStep({ onRead, onBlank }: { onRead: (text: string, files: File[], 
   return (
     <div className="space-y-3">
       <ErrorBox>{error}</ErrorBox>
-      <button type="button" className={`${BIG} border-ae-blue bg-ae-blue text-ae-cream`} onClick={() => setMode('paste')}>
-        📋 Paste a WhatsApp message<div className="text-sm font-normal opacity-90">The quickest way. Paste the chat text as it is.</div>
-      </button>
-      <button type="button" className={`${BIG} border-ae-blue/30 bg-white text-ae-blue`} onClick={() => imgRef.current?.click()}>
-        📷 Upload a screenshot or photo<div className="text-sm font-normal text-stone-600">WhatsApp chat, or a printed PO. (Handwriting doesn’t read well: use Start blank.)</div>
-      </button>
-      <button type="button" className={`${BIG} border-ae-blue/30 bg-white text-ae-blue`} onClick={() => poRef.current?.click()}>
-        📄 Upload a PO file<div className="text-sm font-normal text-stone-600">PDF or Excel, as the customer sent it.</div>
-      </button>
-      <button type="button" className={`${BIG} border-stone-300 bg-white text-stone-700`} onClick={onBlank}>
-        ✏️ Start blank<div className="text-sm font-normal text-stone-500">Pick the customer and products yourself.</div>
-      </button>
+      <div className="grid grid-cols-2 gap-3">
+        {([
+          ['💬', 'WhatsApp', () => setMode('paste')],
+          ['📷', 'Photo', () => imgRef.current?.click()],
+          ['📄', 'PO', () => poRef.current?.click()],
+          ['✏️', 'Custom', onBlank],
+        ] as [string, string, () => void][]).map(([icon, label, go]) => (
+          <button key={label} type="button" onClick={go}
+            className="flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border-2 border-ae-blue/20 bg-white text-xl font-bold text-ae-blue shadow-sm active:bg-ae-blue/5 sm:aspect-[4/3]">
+            <span className="text-5xl" aria-hidden>{icon}</span>{label}
+          </button>
+        ))}
+      </div>
       <input ref={imgRef} type="file" accept="image/*" multiple hidden onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ''; if (f.length) fromImages(f) }} />
       <input ref={poRef} type="file" accept=".pdf,.xlsx,.xls,.csv,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) fromPo(f) }} />
-      <div className="pt-2 text-center">
-        <button type="button" className="text-sm font-semibold text-ae-blue underline" onClick={async () => {
+      <div className="pt-1 text-center">
+        <button type="button" className="text-sm text-stone-500 underline" onClick={async () => {
           await navigator.clipboard.writeText(MESSAGE_TEMPLATE).catch(() => {})
           setCopied(true)
-        }}>Copy the message template</button>
-        {copied && <p className="mt-1 text-xs text-stone-500">Copied. Send it to a customer so their details arrive complete (optional).</p>}
+        }}>{copied ? 'Template copied ✓' : 'Copy message template'}</button>
       </div>
     </div>
   )
@@ -491,10 +489,7 @@ export default function NewOrder() {
   if (step === 'input') {
     return (
       <div className="mx-auto max-w-xl space-y-4">
-        <div>
-          <h2 className="text-xl font-bold text-ae-blue">New order</h2>
-          <p className="text-sm text-stone-600">Give the order as you got it. The Hub reads it and only asks what it isn’t sure about.</p>
-        </div>
+        <h2 className="text-xl font-bold text-ae-blue">New order</h2>
         <InputStep onRead={start} onBlank={startBlank} />
       </div>
     )

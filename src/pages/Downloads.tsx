@@ -67,7 +67,6 @@ export default function Downloads() {
   // Tick everything that is fine whenever the list changes.
   useEffect(() => { setPicked(new Set(ok.filter((o) => !o.ee_uploaded_at).map((o) => o.id))) }, [ok])
   const chosen = list.filter((o) => picked.has(o.id))
-  const noCode = chosen.filter((o) => !o.customer?.ee_customer_code)
   const newCust = newCustomerRows(chosen).length - 1
   const day = todayIST()
 
@@ -121,7 +120,6 @@ export default function Downloads() {
       <Card className="space-y-3">
         <div className="text-sm text-stone-600"><b className="text-stone-900">{chosen.length}</b> orders · {units} units · {rupees(chosen.reduce((s, o) => s + Number(o.invoice_value ?? o.estimate_value), 0))}</div>
         <Button className="w-full" disabled={!chosen.length} onClick={() => csv(`easyecom-wholesale-${day}.csv`, wholesaleRows(chosen))}>⬇ Easy Ecom upload</Button>
-        {noCode.length > 0 && <p className="text-xs text-amber-800">{noCode.length} without Easy Ecom customer code. Add it below first.</p>}
         <div className="grid grid-cols-2 gap-2">
           <Button tone="plain" disabled={!newCust} onClick={() => csv(`easyecom-new-customers-${day}.csv`, newCustomerRows(chosen))}>⬇ New customers ({newCust})</Button>
           <Button tone="plain" disabled={!chosen.length} onClick={master}>⬇ Master list</Button>

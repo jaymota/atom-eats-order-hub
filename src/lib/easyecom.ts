@@ -20,9 +20,12 @@ export interface EeOrder {
   customer: EeCustomer | null
 }
 
-/** One cell → CSV text. Everything quoted, so commas and new lines in addresses are safe. */
-const cell = (v: unknown) => `"${String(v ?? '').replace(/\r?\n/g, ', ').replace(/"/g, '""')}"`
-export const toCsv = (rows: unknown[][]) => '﻿' + rows.map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n'
+/** One cell → CSV text, quoted only when needed, like Easy Ecom's own files. New lines become ", ". */
+const cell = (v: unknown) => {
+  const t = String(v ?? '').replace(/\r?\n/g, ', ')
+  return /[",]|^\s|\s$/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+}
+export const toCsv = (rows: unknown[][]) => rows.map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n'
 
 /** The address the parcel went to. */
 export function shipTo(o: EeOrder) {
@@ -43,18 +46,20 @@ export function problems(o: EeOrder, eeSkus: Set<string>): string[] {
   if (bad.length) p.push(`Not in Easy Ecom: ${bad.join(', ')}`)
   if (!o.invoice_no) p.push('No invoice')
   if (!shipTo(o).pin) p.push('No PIN')
+  if (!o.customer?.ee_customer_code) p.push('No Easy Ecom customer code')
   return p
 }
 
 // ---------- 1. Wholesale bulk (+ → Add Wholesale Orders in Bulk) ----------
-export const WHOLESALE_HEAD = ['CustomerCode', 'ReferenceNum', 'OrderItemId', 'Sku', 'Quantity', 'Price', 'OrderDate', 'PaymentMode', 'ItemDiscount',
-  'ShippingCost', 'OrderNotes', 'EAN', 'AppointmentNumber', 'AppointmentDate', 'POValidityDate', 'MRP']
+// Exactly Easy Ecom's bulkOrdersTemplate.csv. Like its sample, dates and barcodes start with ` so Excel
+// doesn't change them. Payment is only Prepaid or COD here: credit, cheque and FOC orders go as Prepaid.
+export const WHOLESALE_HEAD = ['CustomerCode*', 'ReferenceNum*', 'OrderItemId', 'Sku*', 'Quantity*', 'Price', 'OrderDate*', 'PaymentMode', 'EAN', 'MRP']
 
 export function wholesaleRows(orders: EeOrder[]): unknown[][] {
   const rows: unknown[][] = [WHOLESALE_HEAD]
   for (const o of orders) for (const l of o.order_lines) {
-    rows.push([o.customer?.ee_customer_code ?? '', referenceFor(o), `${o.order_no}-${l.line_no}`, l.sku, l.qty, price(l.rate), o.invoice_date ?? o.order_date,
-      o.payment_type ?? '', '', '', [o.po_number ? `PO ${o.po_number}` : '', o.notes ?? ''].filter(Boolean).join(' · '), l.ean ?? '', '', '', '', price(l.mrp)])
+    rows.push([o.customer?.ee_customer_code ?? '', referenceFor(o), `${o.order_no}-${l.line_no}`, l.sku, l.qty, price(l.rate),
+      `\`${o.invoice_date ?? o.order_date}`, o.payment_type === 'COD' ? 'COD' : 'Prepaid', l.ean ? `\`${l.ean}` : '', price(l.mrp)])
   }
   return rows
 }

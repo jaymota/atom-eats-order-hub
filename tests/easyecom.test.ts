@@ -17,7 +17,7 @@ describe('Easy Ecom files', () => {
   it('wholesale: one row per line, with quantity and B2B/<invoice> reference', () => {
     const r = wholesaleRows([o()])
     expect(r[0]).toEqual(WHOLESALE_HEAD)
-    expect(r[1].slice(0, 8)).toEqual(['EE77', 'B2B/AT/0988/2026-27', 'ORD-00009-1', 'TPC01', 3, '100.00', '2026-10-28', 'Credit'])
+    expect(r[1]).toEqual(['EE77', 'B2B/AT/0988/2026-27', 'ORD-00009-1', 'TPC01', 3, '100.00', '`2026-10-28', 'Prepaid', '`890', '125.00'])
   })
   it('offline import: one row per unit, Credit becomes Prepaid', () => {
     const r = offlineRows([o()])
@@ -28,7 +28,7 @@ describe('Easy Ecom files', () => {
     expect(r[1][OFFLINE_HEAD.indexOf('Invoice Code')]).toBe('AT/0988/2026-27')
   })
   it('CSV keeps commas, quotes and new lines safe', () => {
-    expect(toCsv([['a,b', 'say "hi"', 'x\ny']])).toBe('﻿"a,b","say ""hi""","x, y"\r\n')
+    expect(toCsv([['a,b', 'say "hi"', 'x\ny', 'plain', 3]])).toBe('"a,b","say ""hi""","x, y",plain,3\r\n')
   })
   it('new customers only once, and not if Easy Ecom knows them', () => {
     expect(newCustomerRows([o(), o({ id: '2' })]).length).toBe(1) // has an Easy Ecom code
@@ -40,5 +40,6 @@ describe('Easy Ecom files', () => {
   it('flags SKUs Easy Ecom does not have', () => {
     expect(problems(o(), new Set(['TPC01']))).toEqual([])
     expect(problems(o(), new Set())).toEqual(['Not in Easy Ecom: TPC01'])
+    expect(problems(o({ customer: null }), new Set(['TPC01']))).toEqual(['No Easy Ecom customer code'])
   })
 })

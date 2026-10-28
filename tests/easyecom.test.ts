@@ -17,7 +17,7 @@ describe('Easy Ecom files', () => {
   it('wholesale: one row per line, with quantity and B2B/<invoice> reference', () => {
     const r = wholesaleRows([o()])
     expect(r[0]).toEqual(WHOLESALE_HEAD)
-    expect(r[1]).toEqual(['EE77', 'B2B/AT/0988/2026-27', 'ORD-00009-1', 'TPC01', 3, '100.00', '`2026-10-28', 'Prepaid', '`890', '125.00'])
+    expect(r[1]).toEqual(['EE77', 'B2B/AT/0988/2026-27', 'ORD-00009-1', 'TPC01', 3, '100.00', '`2026-10-28', 'Prepaid', '', '125.00'])
   })
   it('offline import: one row per unit, Credit becomes Prepaid', () => {
     const r = offlineRows([o()])

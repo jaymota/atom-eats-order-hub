@@ -53,13 +53,14 @@ export function problems(o: EeOrder, eeSkus: Set<string>): string[] {
 // ---------- 1. Wholesale bulk (+ → Add Wholesale Orders in Bulk) ----------
 // Exactly Easy Ecom's bulkOrdersTemplate.csv. Like its sample, dates and barcodes start with ` so Excel
 // doesn't change them. Payment is only Prepaid or COD here: credit, cheque and FOC orders go as Prepaid.
+// EAN stays empty: Easy Ecom refuses a row that has both a SKU and an EAN ("provide only one").
 export const WHOLESALE_HEAD = ['CustomerCode*', 'ReferenceNum*', 'OrderItemId', 'Sku*', 'Quantity*', 'Price', 'OrderDate*', 'PaymentMode', 'EAN', 'MRP']
 
 export function wholesaleRows(orders: EeOrder[]): unknown[][] {
   const rows: unknown[][] = [WHOLESALE_HEAD]
   for (const o of orders) for (const l of o.order_lines) {
     rows.push([o.customer?.ee_customer_code ?? '', referenceFor(o), `${o.order_no}-${l.line_no}`, l.sku, l.qty, price(l.rate),
-      `\`${o.invoice_date ?? o.order_date}`, o.payment_type === 'COD' ? 'COD' : 'Prepaid', l.ean ? `\`${l.ean}` : '', price(l.mrp)])
+      `\`${o.invoice_date ?? o.order_date}`, o.payment_type === 'COD' ? 'COD' : 'Prepaid', '', price(l.mrp)])
   }
   return rows
 }
@@ -93,7 +94,7 @@ export function offlineRows(orders: EeOrder[]): unknown[][] {
 
 // ---------- 3. One item file per order (B2B order screen → upload items) ----------
 export const ITEM_HEAD = ['Sku', 'Quantity', 'Price', 'EAN']
-export const itemRows = (o: EeOrder): unknown[][] => [ITEM_HEAD, ...o.order_lines.map((l) => [l.sku, l.qty, price(l.rate), l.ean ?? ''])]
+export const itemRows = (o: EeOrder): unknown[][] => [ITEM_HEAD, ...o.order_lines.map((l) => [l.sku, l.qty, price(l.rate), ''])] // SKU only, as above
 
 // ---------- 4. New customers (Easy Ecom "B2B Customers" layout) ----------
 export const CUSTOMER_HEAD = ['Company Name', 'Email', 'Password', 'Tax Identification Number/ GST', 'Ship To GSTIN', 'Contact Number', 'Country', 'Billing_Name',

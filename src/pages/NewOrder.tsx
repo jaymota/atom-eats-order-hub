@@ -120,14 +120,15 @@ function InputStep({ onRead, onBlank }: { onRead: (text: string, files: File[], 
       <ErrorBox>{error}</ErrorBox>
       <div className="grid grid-cols-2 gap-3">
         {([
-          ['💬', 'WhatsApp', () => setMode('paste')],
-          ['📷', 'Photo', () => imgRef.current?.click()],
-          ['📄', 'PO', () => poRef.current?.click()],
-          ['✏️', 'Custom', onBlank],
-        ] as [string, string, () => void][]).map(([icon, label, go]) => (
+          ['💬', 'WhatsApp', 'Paste the order message', () => setMode('paste')],
+          ['📷', 'Photo', 'Screenshot or photo of the order', () => imgRef.current?.click()],
+          ['📄', 'PO', 'Upload the PO (PDF or Excel)', () => poRef.current?.click()],
+          ['✏️', 'Custom', 'Type the order yourself', onBlank],
+        ] as [string, string, string, () => void][]).map(([icon, label, hint, go]) => (
           <button key={label} type="button" onClick={go}
             className="flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border-2 border-ae-blue/20 bg-white text-xl font-bold text-ae-blue shadow-sm active:bg-ae-blue/5 sm:aspect-[4/3]">
             <span className="text-5xl" aria-hidden>{icon}</span>{label}
+            <span className="px-2 text-center text-xs font-normal leading-tight text-stone-500">{hint}</span>
           </button>
         ))}
       </div>

@@ -40,12 +40,13 @@ export function itemsShort(lines: { product_name: string | null; qty: number }[]
   return s.length > 3 ? `${s.slice(0, 3).join(', ')} +${s.length - 3} more` : s.join(', ')
 }
 
-export default function Orders() {
+/** The full order list. `embedded` = inside Plan / Invoice / Dispatch (no heading). */
+export default function Orders({ embedded = false }: { embedded?: boolean }) {
   const [rows, setRows] = useState<OrderRow[]>([])
   const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
-  const [stage, setStage] = useState('open')
+  const [stage, setStage] = useState(embedded ? 'all' : 'open')
   const [channel, setChannel] = useState('')
   const [person, setPerson] = useState('')
   const [from, setFrom] = useState('')
@@ -82,10 +83,12 @@ export default function Orders() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <h2 className="text-xl font-bold text-ae-blue">Orders</h2>
-        <Link to="/orders/new"><Button>+ New order</Button></Link>
-      </div>
+      {!embedded && (
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h2 className="text-xl font-bold text-ae-blue">Orders</h2>
+          <Link to="/orders/new"><Button>+ New order</Button></Link>
+        </div>
+      )}
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: customer, order no., PO no., invoice no., tracking no." />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Select value={stage} onChange={(e) => setStage(e.target.value)}>
@@ -102,8 +105,8 @@ export default function Orders() {
           {[...people].map(([id, n]) => <option key={id} value={id}>{n}</option>)}
         </Select>
         <div className="col-span-2 flex gap-2 sm:col-span-1">
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" />
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" />
+          <Input type="date" className="min-w-0" value={from} onChange={(e) => setFrom(e.target.value)} title="From" />
+          <Input type="date" className="min-w-0" value={to} onChange={(e) => setTo(e.target.value)} title="To" />
         </div>
       </div>
       <div className="flex flex-wrap gap-4 text-sm font-semibold text-stone-700">

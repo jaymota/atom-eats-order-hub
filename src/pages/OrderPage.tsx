@@ -11,7 +11,7 @@ import { age, can, isLate, notify, rupees, todayIST, attachFile, type Stage } fr
 import { supabase } from '../lib/supabase'
 import { todoChanged } from '../lib/todo'
 import { StageBadge } from './Orders'
-import { DispatchFields, InvoiceFields, blankDisp, blankInv, dispReady, invReady, saveDispatches, saveInvoices, usePeople } from './Todo'
+import { DispatchFields, InvoiceFields, blankDisp, blankInv, dispReady, invReady, saveDispatches, saveInvoices, saveTracking, savedDisp, usePeople } from './Todo'
 
 interface Order {
   id: string; order_no: string; stage: Stage; channel: string; order_date: string; received_at: string; salesperson_id: string | null
@@ -155,7 +155,7 @@ export default function OrderPage() {
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             {field('Invoice', `${o.invoice_no} · ${o.invoice_date ?? ''} · ${rupees(o.invoice_value)}`)}
             {field('Shared with', people.get(o.shared_with ?? '') ?? null)}
-            {o.dispatch_date && field('Dispatched', [o.dispatch_date, o.courier, o.tracking_no, o.boxes ? `${o.boxes} box${o.boxes === 1 ? '' : 'es'}` : null].filter(Boolean).join(' · '))}
+            {o.dispatch_date && field('Dispatched', [o.dispatch_date, o.courier, o.tracking_no ?? (o.courier === 'Customer pickup' ? null : 'tracking to follow'), o.boxes ? `${o.boxes} box${o.boxes === 1 ? '' : 'es'}` : null].filter(Boolean).join(' · '))}
             {o.dispatch_note && field('Dispatch note', o.dispatch_note)}
             {o.delivered_at && field('Delivered', istDateTime(o.delivered_at))}
           </dl>
@@ -268,6 +268,7 @@ function NextStep({ o, lines, role, onDone, onError }: { o: Order; lines: Line[]
   const [disp, setDisp] = useState(() => ({ ...blankDisp(o), on: true }))
   const [date, setDate] = useState(todayIST())
   const [split, setSplit] = useState<Record<string, number> | null>(null)
+  const [trk, setTrk] = useState<ReturnType<typeof savedDisp> | null>(null)
   const [busy, setBusy] = useState(false)
   const proofRef = useRef<HTMLInputElement>(null)
 
@@ -302,13 +303,22 @@ function NextStep({ o, lines, role, onDone, onError }: { o: Order; lines: Line[]
         <Button disabled={busy || !dispReady(disp)} onClick={() => run(async () => { await saveDispatches(date, [[o.id, disp]]); return 'Dispatched.' })}>Dispatched</Button>
       </div>
     )
-  } else if (o.stage === 'dispatched' && can.dispatch(role)) {
-    body = (
-      <>
-        <Button disabled={busy} onClick={() => run(async () => { await rpc('mark_delivered', { p_ids: [o.id] }); return 'Delivered.' })}>Delivered</Button>
-        <Button tone="plain" className="ml-2" disabled={busy} onClick={() => proofRef.current?.click()}>📎 Proof / GRN</Button>
+  } else if (['dispatched', 'delivered'].includes(o.stage) && can.dispatch(role)) {
+    body = trk ? (
+      <div className="space-y-2">
+        <DispatchFields v={trk} set={setTrk} />
+        <div className="flex gap-2">
+          <Button disabled={busy || !dispReady(trk)} onClick={() => run(async () => { await saveTracking(o.id, trk); setTrk(null); return 'Tracking saved.' })}>Save tracking</Button>
+          <Button tone="plain" onClick={() => setTrk(null)}>Back</Button>
+        </div>
+      </div>
+    ) : (
+      <div className="flex flex-wrap gap-2">
+        {o.stage === 'dispatched' && <Button disabled={busy} onClick={() => run(async () => { await rpc('mark_delivered', { p_ids: [o.id] }); return 'Delivered.' })}>Delivered</Button>}
+        <Button tone={o.tracking_no ? 'plain' : 'primary'} disabled={busy} onClick={() => setTrk(savedDisp(o))}>{o.tracking_no ? '✏️ Tracking' : '+ Tracking'}</Button>
+        <Button tone="plain" disabled={busy} onClick={() => proofRef.current?.click()}>📎 Proof / GRN</Button>
         <input ref={proofRef} type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run(async () => { await attachFile(o.id, f, 'grn'); return 'File added.' }) }} />
-      </>
+      </div>
     )
   }
   const mayUndo = (o.stage === 'planned' && can.plan(role)) || (o.stage === 'invoiced' && can.invoice(role)) || (o.stage === 'dispatched' && (role === 'admin' || role === 'super_admin'))

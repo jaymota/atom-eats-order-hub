@@ -61,6 +61,7 @@ export interface Draft {
   po_date: string
   needed_by: string
   payment_type: string
+  shipping_charge: number | null
   courier_pref: string
   notes: string
   lines: DraftLine[]
@@ -78,10 +79,10 @@ export function emptyDraft(salespersonId: string | null): Draft {
   return {
     id: null, channel: '', order_date: todayIST(), salesperson_id: salespersonId,
     customer_id: null, customer_name: '', contact_name: '', phone: '', email: '', gst_status: '', gstin: '', fssai: '',
-    billing_address: '', billing_city: '', billing_state: '', billing_pin: '', payment_terms: '', margin_pct: null,
+    billing_address: '', billing_city: '', billing_state: '', billing_pin: '', payment_terms: 'credit', margin_pct: null,
     same_as_billing: false, address_id: null, delivery_name: '', delivery_address: '', delivery_city: '', delivery_state: '',
     delivery_pin: '', delivery_gstin: '', delivery_contact: '', delivery_phone: '',
-    po_number: '', po_date: '', needed_by: '', payment_type: '', courier_pref: '', notes: '',
+    po_number: '', po_date: '', needed_by: '', payment_type: 'Credit', courier_pref: 'DTDC', shipping_charge: null, notes: '',
     lines: [], source: 'blank', source_text: '', files: [], learn_customer_alias: null,
   }
 }
@@ -94,7 +95,7 @@ export function lineRate(l: DraftLine, mrp: number | null): number | null {
 }
 
 export function draftTotal(d: Draft, c: Catalog): number {
-  return d.lines.reduce((s, l) => s + (lineRate(l, c.bySku.get(l.sku)?.mrp ?? null) ?? 0) * (l.qty ?? 0), 0)
+  return d.lines.reduce((s, l) => s + (lineRate(l, c.bySku.get(l.sku)?.mrp ?? null) ?? 0) * (l.qty ?? 0), 0) + (d.shipping_charge ?? 0)
 }
 
 /** ✱ details: the order can't be saved without these. */
@@ -174,7 +175,8 @@ export async function applyCustomer(d: Draft, customerId: string): Promise<Draft
     billing_city: pick(d.billing_city, c.billing_city),
     billing_state: pick(d.billing_state, c.billing_state ?? stateFromGstin(c.gstin ?? '')),
     billing_pin: pick(d.billing_pin, c.billing_pin),
-    payment_terms: pick(d.payment_terms, c.payment_terms),
+    // The customer's own terms win over the default (credit).
+    payment_terms: c.payment_terms || d.payment_terms || 'credit',
     margin_pct: d.margin_pct ?? c.default_margin ?? null,
   }
   const a = (addrs ?? [])[0]
@@ -304,7 +306,7 @@ export async function loadDraft(id: string): Promise<Draft> {
     same_as_billing: o.same_as_billing, address_id: o.address_id, delivery_name: s(o.delivery_name), delivery_address: s(o.delivery_address),
     delivery_city: s(o.delivery_city), delivery_state: s(o.delivery_state), delivery_pin: s(o.delivery_pin), delivery_gstin: s(o.delivery_gstin),
     delivery_contact: s(o.delivery_contact), delivery_phone: s(o.delivery_phone), po_number: s(o.po_number), po_date: s(o.po_date),
-    needed_by: s(o.needed_by), payment_type: s(o.payment_type), courier_pref: s(o.courier_pref), notes: s(o.notes),
+    needed_by: s(o.needed_by), payment_type: s(o.payment_type), courier_pref: s(o.courier_pref), shipping_charge: o.shipping_charge ? Number(o.shipping_charge) : null, notes: s(o.notes),
     source: o.source, source_text: s(o.source_text),
     lines: (lines ?? []).map((l) => ({ key: newKey(), sku: l.sku, qty: l.qty, typed_as: l.typed_as, price_basis: l.price_basis, margin_pct: l.margin_pct, rate: l.rate, learn: false })),
   }

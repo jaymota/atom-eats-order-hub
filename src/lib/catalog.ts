@@ -1,6 +1,6 @@
 // Products and their other names, loaded once and searched in the browser.
 import { useCallback, useEffect, useState } from 'react'
-import { features, norm, scoreProduct, tidy } from './match'
+import { features, isBulkPack, norm, scoreProduct, tidy } from './match'
 import { supabase } from './supabase'
 
 export interface Product {
@@ -95,11 +95,14 @@ export function useCatalog() {
   return { catalog, error, reload }
 }
 
-/** "Mini Pretzel Knots · 30 g · ₹99" */
+/** Bulk packs (500 g, 1 kg) are sold at an agreed rate, so their MRP is never shown or used. */
+export const isBulk = (p: { size: string | null; name: string }) => isBulkPack(p.size || p.name)
+
+/** "Mini Pretzel Knots · 30 g · ₹99" (no MRP for bulk packs) */
 export function productLabel(p: Product): string {
   const name = p.name.replace(/ - Pack of 1$/i, '')
   const sizeInName = p.size && features(name).grams === features(p.size).grams
-  return [name, sizeInName ? null : p.size, p.mrp != null ? `₹${p.mrp}` : null].filter(Boolean).join(' · ')
+  return [name, sizeInName ? null : p.size, p.mrp != null && !isBulk(p) ? `₹${p.mrp}` : null].filter(Boolean).join(' · ')
 }
 
 /** Finds products for what someone typed: SKU, barcode, any other name, or a misspelt description. */

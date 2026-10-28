@@ -59,3 +59,14 @@ describe('customers', () => {
     expect(gstinState('27AAACZ8867B1')).toBeNull()
   })
 })
+
+import { isBulkPack } from '../src/lib/match'
+describe('bulk packs', () => {
+  it('500 g and 1 kg are bulk; small packs are not', () => {
+    expect(isBulkPack('500 g')).toBe(true)
+    expect(isBulkPack('Atom Eats Mini Pretzel Sticks, 500g')).toBe(true)
+    expect(isBulkPack('1 kg')).toBe(true)
+    expect(isBulkPack('Truffle Potato Chips - Pack of 1 · 40 g')).toBe(false)
+    expect(isBulkPack(null)).toBe(false)
+  })
+})

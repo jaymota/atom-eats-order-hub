@@ -140,3 +140,6 @@ export const GST_STATES: Record<string, string> = {
   '31': 'Lakshadweep', '32': 'Kerala', '33': 'Tamil Nadu', '34': 'Puducherry', '35': 'Andaman and Nicobar Islands',
   '36': 'Telangana', '37': 'Andhra Pradesh', '38': 'Ladakh',
 }
+
+/** Bulk packs (500 g and up) have no MRP that matters: they are sold at an agreed rate. */
+export const isBulkPack = (sizeOrName: string | null | undefined) => (features(sizeOrName).grams ?? 0) >= 500

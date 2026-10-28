@@ -60,7 +60,7 @@ export default function Invoices() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xl font-bold text-ae-blue">Invoices</h2>
+        <h2 className="text-xl font-bold text-ae-blue">All invoices</h2>
         <Button tone="plain" disabled={!list.length} onClick={download}>⬇ Excel</Button>
       </div>
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" />

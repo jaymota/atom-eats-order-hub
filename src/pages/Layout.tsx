@@ -14,7 +14,7 @@ const LINKS: L[] = [
   { to: '/invoice', label: 'Invoice', count: 'invoice', roles: ACC },
   { to: '/dispatch', label: 'Dispatch', count: 'dispatch', roles: OPS },
   { to: '/orders', label: 'Orders', end: true },
-  { to: '/invoices', label: 'Invoices', roles: ACC },
+  { to: '/invoices', label: 'All invoices', roles: ACC },
   { to: '/downloads', label: 'Downloads', roles: [...OPS, 'accounts'] },
   { to: '/products', label: 'Products' },
   { to: '/customers', label: 'Customers' },

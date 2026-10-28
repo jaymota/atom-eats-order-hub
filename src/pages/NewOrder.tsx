@@ -5,7 +5,7 @@ import { Badge, Button, Card, ErrorBox, Input, OkBox } from '../components/ui'
 import AddProduct from '../components/AddProduct'
 import OrderReview from '../components/OrderReview'
 import { useAuth } from '../lib/auth'
-import { loadCatalog, productLabel, searchProducts, useCatalog, type Catalog, type Product } from '../lib/catalog'
+import { isBulk, loadCatalog, productLabel, searchProducts, useCatalog, type Catalog, type Product } from '../lib/catalog'
 import { nameSimilarity, norm, tidy } from '../lib/match'
 import {
   MESSAGE_TEMPLATE, applyCustomer, emptyDraft, loadCustomersLite, newKey, splitAddress, stateFromGstin, type Draft, type DraftLine,
@@ -39,7 +39,7 @@ function poLine(cat: Catalog, item: ResolvedItem, sku: string, qty: number | nul
   const rate = si.rate ?? (si.basic ? Math.round(si.basic * (1 + gst / 100) * 100) / 100 : null)
   return {
     key: newKey(), sku, qty, typed_as: item.typed, learn: false, ean_seen: si.ean ?? null,
-    price_basis: rate != null ? 'po_rate' : null, margin_pct: null, rate,
+    price_basis: rate != null ? 'po_rate' : cat.bySku.get(sku) && isBulk(cat.bySku.get(sku)!) ? 'agreed_rate' : null, margin_pct: null, rate,
   }
 }
 
@@ -394,6 +394,8 @@ export default function NewOrder() {
   const [info, setInfo] = useState('')
 
   const basis = (d: Draft) => (d.channel === 'FOC' ? 'foc' : d.margin_pct != null ? 'mrp_minus_margin' : null)
+  /** Bulk packs never use "MRP minus margin": they need an agreed rate. */
+  const bulkLine = (sku: string) => { const p = catalog?.bySku.get(sku); return !!p && isBulk(p) }
 
   const start = async (text: string, files: File[], source: string, sheetItems?: PoItem[]) => {
     const cat = catalog ?? (await loadCatalog())
@@ -474,7 +476,7 @@ export default function NewOrder() {
     let i = at
     while (i < queue.length && !relevant(queue[i], draft)) i++
     if (i >= queue.length) {
-      setDraft((d) => ({ ...d, lines: d.lines.map((l) => (l.price_basis ? l : { ...l, price_basis: basis(d), margin_pct: d.margin_pct })) }))
+      setDraft((d) => ({ ...d, lines: d.lines.map((l) => (l.price_basis ? l : { ...l, price_basis: d.channel !== 'FOC' && bulkLine(l.sku) ? 'agreed_rate' : basis(d), margin_pct: d.margin_pct })) }))
       setStep('review')
     } else if (i !== at) setAt(i)
   }, [step, at, queue, draft]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -562,7 +564,7 @@ export default function NewOrder() {
           <MarginQuestion found={an.read?.margin ?? draft.margin_pct} onAnswer={(m) => {
             if (m === 'rate') next({ ...draft, lines: draft.lines.map((l) => ({ ...l, price_basis: l.price_basis ?? 'agreed_rate' })) })
             else if (m === 'foc') next({ ...draft, lines: draft.lines.map((l) => ({ ...l, price_basis: 'foc' })) })
-            else next({ ...draft, margin_pct: m, lines: draft.lines.map((l) => (l.price_basis ? l : { ...l, price_basis: m == null ? null : 'mrp_minus_margin', margin_pct: m })) })
+            else next({ ...draft, margin_pct: m, lines: draft.lines.map((l) => (l.price_basis ? l : bulkLine(l.sku) ? { ...l, price_basis: 'agreed_rate' } : { ...l, price_basis: m == null ? null : 'mrp_minus_margin', margin_pct: m })) })
           }} />
         )}
         {q.kind === 'po' && <PoQuestion onAnswer={(po, date) => next({ ...draft, po_number: po, po_date: date })} />}

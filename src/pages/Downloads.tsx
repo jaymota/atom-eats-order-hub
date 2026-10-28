@@ -12,7 +12,7 @@ import { StageBadge } from './Orders'
 const COLS = `id, order_no, order_date, channel, stage, salesperson_id, customer_id, customer_name, contact_name, phone, email, gstin, fssai,
   billing_address, billing_city, billing_state, billing_pin, same_as_billing, delivery_name, delivery_address, delivery_city, delivery_state, delivery_pin,
   delivery_gstin, delivery_phone, po_number, po_date, payment_type, payment_terms, notes, invoice_no, invoice_date, invoice_value, shared_with,
-  dispatch_date, courier, tracking_no, ee_uploaded_at, estimate_value,
+  dispatch_date, courier, tracking_no, ee_uploaded_at, estimate_value, shipping_charge,
   order_lines(line_no, sku, qty, rate, value, mrp, ean, gst_rate, hsn, tally_name, product_name),
   customer:customers(code, ee_customer_code, in_easy_ecom)`
 

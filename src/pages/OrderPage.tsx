@@ -10,6 +10,7 @@ import { compressImage } from '../lib/readers'
 import { age, can, isLate, notify, rupees, todayIST, attachFile, type Stage } from '../lib/stages'
 import { supabase } from '../lib/supabase'
 import { todoChanged } from '../lib/todo'
+import { isBulkPack } from '../lib/match'
 import { StageBadge } from './Orders'
 import { DispatchFields, InvoiceFields, blankDisp, blankInv, dispReady, invReady, saveDispatches, saveInvoices, saveTracking, savedDisp, usePeople } from './Todo'
 
@@ -22,7 +23,7 @@ interface Order {
   delivery_gstin: string | null; delivery_contact: string | null; delivery_phone: string | null; po_number: string | null; po_date: string | null
   needed_by: string | null; payment_type: string | null; courier_pref: string | null; notes: string | null; source: string; source_text: string | null
   estimate_value: number; missing: string[]; invoice_no: string | null; invoice_date: string | null; invoice_value: number | null
-  po_generated: boolean; dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
+  po_generated: boolean; shipping_charge: number; dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
   shared_with: string | null; planned_by: string | null; boxes: number | null; dispatch_note: string | null; delivered_at: string | null; split_from: string | null
 }
 interface Line { id: string; sku: string; qty: number; price_basis: PriceBasis | null; margin_pct: number | null; rate: number | null; value: number; product_name: string | null; mrp: number | null; tally_name: string | null; typed_as: string | null }
@@ -175,7 +176,7 @@ export default function OrderPage() {
                     <div className="text-xs text-stone-500"><span className="font-mono">{l.sku}</span>{l.tally_name && <> · Tally: {l.tally_name}</>}{l.typed_as && <> · said “{l.typed_as}”</>}</div>
                   </td>
                   <td className="px-2">{l.qty}</td>
-                  <td className="px-2 text-xs">{l.rate != null ? rupees(l.rate) : '—'}<div className="text-stone-500">{l.price_basis ? BASIS_LABEL[l.price_basis] : 'no price yet'}{l.price_basis === 'mrp_minus_margin' && l.margin_pct != null && ` ${l.margin_pct}%`} · MRP {rupees(l.mrp)}</div></td>
+                  <td className="px-2 text-xs">{l.rate != null ? rupees(l.rate) : '—'}<div className="text-stone-500">{l.price_basis ? BASIS_LABEL[l.price_basis] : 'no price yet'}{l.price_basis === 'mrp_minus_margin' && l.margin_pct != null && ` ${l.margin_pct}%`}{!isBulkPack(l.product_name) && <> · MRP {rupees(l.mrp)}</>}</div></td>
                   <td className="px-2 text-right font-semibold">{rupees(l.value)}</td>
                 </tr>
               ))}
@@ -183,6 +184,7 @@ export default function OrderPage() {
           </table>
         </div>
         <div className="mt-2 text-right text-sm">
+          {Number(o.shipping_charge) > 0 && <div className="font-semibold text-ae-blue">🚚 Shipping {rupees(o.shipping_charge)} (add to invoice)</div>}
           {o.invoice_value != null ? <>Invoice value: <b>{rupees(o.invoice_value)}</b></> : <>Estimated value (incl. GST): <b>{rupees(o.estimate_value)}</b></>}
         </div>
       </Card>

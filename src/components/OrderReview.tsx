@@ -2,7 +2,7 @@
 // Used at the end of the order form and for editing a saved order.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { productLabel, useCatalog } from '../lib/catalog'
+import { isBulk, productLabel, useCatalog } from '../lib/catalog'
 import { GST_STATES, gstinState } from '../lib/match'
 import {
   BASIS_LABEL, COURIERS, PAYMENT_TYPES, PO_CHANNELS, draftTotal, findRepeat, lineRate, mustHave, newKey, saveDraft, stateFromGstin, stillMissing,
@@ -45,7 +45,11 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
   /** One margin for every line priced as "MRP minus margin". */
   const applyMargin = (m: number | null) => setDraft({
     ...d, margin_pct: m,
-    lines: d.lines.map((l) => (l.price_basis === 'mrp_minus_margin' || !l.price_basis ? { ...l, price_basis: 'mrp_minus_margin', margin_pct: m } : l)),
+    lines: d.lines.map((l) => {
+      const p = catalog?.bySku.get(l.sku)
+      if (p && isBulk(p)) return l.price_basis ? l : { ...l, price_basis: 'agreed_rate' }
+      return l.price_basis === 'mrp_minus_margin' || !l.price_basis ? { ...l, price_basis: 'mrp_minus_margin', margin_pct: m } : l
+    }),
   })
 
   const save = async (anyway: boolean) => {
@@ -72,7 +76,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
   }
 
   const addLine = (p: Product) => {
-    setDraft({ ...d, lines: [...d.lines, { key: newKey(), sku: p.sku, qty: null, typed_as: null, price_basis: d.channel === 'FOC' ? 'foc' : 'mrp_minus_margin', margin_pct: d.margin_pct, rate: null, learn: false }] })
+    setDraft({ ...d, lines: [...d.lines, { key: newKey(), sku: p.sku, qty: null, typed_as: null, price_basis: d.channel === 'FOC' ? 'foc' : isBulk(p) ? 'agreed_rate' : 'mrp_minus_margin', margin_pct: d.margin_pct, rate: null, learn: false }] })
     setAdding(false)
   }
 
@@ -184,7 +188,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
                 <Field label="Price basis ✱✱">
                   <Select value={l.price_basis ?? ''} onChange={(e) => setLine(l.key, { price_basis: (e.target.value || null) as PriceBasis | null, margin_pct: e.target.value === 'mrp_minus_margin' ? l.margin_pct ?? d.margin_pct : l.margin_pct })}>
                     <option value="">Choose…</option>
-                    {(Object.keys(BASIS_LABEL) as PriceBasis[]).map((b) => <option key={b} value={b}>{BASIS_LABEL[b]}</option>)}
+                    {(Object.keys(BASIS_LABEL) as PriceBasis[]).filter((b) => b !== 'mrp_minus_margin' || !p || !isBulk(p) || l.price_basis === b).map((b) => <option key={b} value={b}>{BASIS_LABEL[b]}</option>)}
                   </Select>
                 </Field>
                 {l.price_basis === 'mrp_minus_margin' ? (
@@ -195,7 +199,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
                 <div className="text-sm">
                   <div className="text-xs font-semibold text-stone-500">Value</div>
                   <div className="mt-2 font-semibold text-stone-900">{rate == null ? '—' : rupees(rate * (l.qty ?? 0))}</div>
-                  {rate != null && <div className="text-xs text-stone-500">{rupees(rate)} each · MRP {rupees(p?.mrp)}</div>}
+                  {rate != null && <div className="text-xs text-stone-500">{rupees(rate)} each{p && !isBulk(p) && <> · MRP {rupees(p.mrp)}</>}</div>}
                 </div>
               </div>
             </li>
@@ -209,7 +213,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
         )}
         {adding === 'new' && <div className="mt-3"><AddProduct onCancel={() => setAdding(false)} onAdded={addLine} /></div>}
         {!adding && <Button tone="plain" className="mt-3" onClick={() => setAdding('pick')}>+ Add a product</Button>}
-        <div className="mt-3 text-right text-sm text-stone-700">Estimated value (incl. GST): <b className="text-lg text-stone-900">{rupees(total)}</b></div>
+        <div className="mt-3 text-right text-sm text-stone-700">{(d.shipping_charge ?? 0) > 0 && <div>+ shipping {rupees(d.shipping_charge)}</div>}Estimated value (incl. GST): <b className="text-lg text-stone-900">{rupees(total)}</b></div>
       </Card>
 
       <Card>
@@ -218,8 +222,11 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
           <Field label="Payment type ✱✱">
             <Select {...inp('payment_type')}><option value="">Choose…</option>{PAYMENT_TYPES.map((t) => <option key={t}>{t}</option>)}</Select>
           </Field>
-          <Field label="Preferred courier">
+          <Field label="Courier">
             <Select {...inp('courier_pref')}><option value="">—</option>{COURIERS.map((t) => <option key={t}>{t}</option>)}</Select>
+          </Field>
+          <Field label="Shipping charge ₹" hint="Accounts adds this to the invoice">
+            <Input inputMode="decimal" placeholder="0" value={d.shipping_charge ?? ''} onChange={(e) => { const v = e.target.value.replace(/[^\d.]/g, ''); setDraft({ ...d, shipping_charge: v === '' ? null : Number(v) }) }} />
           </Field>
           <Field label="Notes"><Input {...inp('notes')} /></Field>
         </div>

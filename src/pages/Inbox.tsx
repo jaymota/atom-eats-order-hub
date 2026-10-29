@@ -7,6 +7,8 @@ import { useAuth } from '../lib/auth'
 import { ago, isAdmin } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { todoChanged } from '../lib/todo'
+import { age, can } from '../lib/stages'
+import { itemsShort } from './Orders'
 
 interface Mail {
   id: string; from_addr: string; from_name: string | null; subject: string; received_at: string; body_text: string | null
@@ -15,9 +17,10 @@ interface Mail {
 }
 interface OrderRef { id: string; order_no: string; po_number: string | null; customer_name: string; stage: string }
 interface Sender { id: number; match: string; source: string; active: boolean }
+interface SalesOrder { id: string; order_no: string; customer_name: string; received_at: string; salesperson: { name: string } | null; order_lines: { product_name: string | null; qty: number }[] }
 
 const SOURCE: Record<string, string> = { blinkit: 'Blinkit', foodstories: 'Foodstories', foodsquare: 'Food Square', forwarded: 'Forwarded' }
-const TABS = [['po', 'POs'], ['grn', 'GRN'], ['other', 'Other'], ['done', 'Done']] as const
+const TABS = [['sales', 'Sales'], ['po', 'POs'], ['grn', 'GRN'], ['other', 'Other'], ['done', 'Done']] as const
 
 export default function Inbox() {
   const { me } = useAuth()
@@ -25,19 +28,24 @@ export default function Inbox() {
   const [mails, setMails] = useState<Mail[] | null>(null)
   const [orders, setOrders] = useState<OrderRef[]>([])
   const [senders, setSenders] = useState<Sender[]>([])
-  const [tab, setTab] = useState<string>('po')
+  const [sales, setSales] = useState<SalesOrder[]>([])
+  const [tab, setTab] = useState<string>('')
   const [pick, setPick] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
   const [add, setAdd] = useState({ match: '', source: '' })
 
   const load = useCallback(async () => {
-    const [m, o, s] = await Promise.all([
+    const [m, o, s, so] = await Promise.all([
       supabase.from('inbox_emails').select('id, from_addr, from_name, subject, received_at, body_text, source, kind, status, order_id, note, inbox_files(id, path, name)')
         .order('received_at', { ascending: false }).limit(300),
       supabase.from('orders').select('id, order_no, po_number, customer_name, stage').not('po_number', 'is', null).order('created_at', { ascending: false }).limit(1000),
       supabase.from('inbox_senders').select('*').order('source'),
+      supabase.from('orders').select('id, order_no, customer_name, received_at, salesperson:people!orders_salesperson_id_fkey(name), order_lines(product_name, qty)').eq('stage', 'sales_order').order('received_at'),
     ])
+    setSales((so.data ?? []) as unknown as SalesOrder[])
+    // Open on the first tab that has something waiting.
+    setTab((t) => t || ((so.data ?? []).length ? 'sales' : 'po'))
     setMails((m.data ?? []) as Mail[])
     setOrders((o.data ?? []) as OrderRef[])
     setSenders((s.data ?? []) as Sender[])
@@ -47,7 +55,7 @@ export default function Inbox() {
 
   const inTab = (m: Mail) => (tab === 'done' ? m.status !== 'new' : m.status === 'new' && (tab === 'po' ? ['po', 'revised'].includes(m.kind) : m.kind === tab))
   const list = useMemo(() => (mails ?? []).filter(inTab), [mails, tab]) // eslint-disable-line react-hooks/exhaustive-deps
-  const count = (k: string) => (mails ?? []).filter((m) => m.status === 'new' && (k === 'po' ? ['po', 'revised'].includes(m.kind) : m.kind === k)).length
+  const count = (k: string) => k === 'sales' ? sales.length : (mails ?? []).filter((m) => m.status === 'new' && (k === 'po' ? ['po', 'revised'].includes(m.kind) : m.kind === k)).length
 
   /** Orders whose PO number appears in the email's subject or text (GRNs, revised POs). */
   const matches = (m: Mail) => {
@@ -86,7 +94,29 @@ export default function Inbox() {
       <OkBox>{msg}</OkBox>
       <ErrorBox>{error}</ErrorBox>
 
-      {!mails ? <p className="text-sm text-stone-500">Loading…</p> : !list.length ? <Card><p className="text-stone-600">Nothing here.</p></Card> : (
+      {tab === 'sales' ? (
+        !sales.length ? <Card><p className="text-stone-600">No sales orders waiting.</p></Card> : (
+          <ul className="space-y-2">
+            {sales.map((s) => (
+              <li key={s.id}>
+                <Card className="space-y-1 p-3 sm:p-4">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold text-stone-900">{s.customer_name}</span>
+                    <span className="text-xs text-stone-500">{age(s.received_at)}</span>
+                  </div>
+                  <div className="text-xs text-stone-500">{s.order_no}{s.salesperson && ` · by ${s.salesperson.name}`}</div>
+                  <div className="text-sm text-stone-700">{itemsShort(s.order_lines)}</div>
+                  <div className="pt-1">
+                    {can.plan(me?.role)
+                      ? <Button onClick={() => navigate(`/orders/${s.id}`, { state: { complete: true } })}>Complete</Button>
+                      : <Link to={`/orders/${s.id}`} className="font-semibold text-ae-blue underline">Open</Link>}
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : !mails ? <p className="text-sm text-stone-500">Loading…</p> : !list.length ? <Card><p className="text-stone-600">Nothing here.</p></Card> : (
         <ul className="space-y-2">
           {list.map((m) => {
             const found = m.kind !== 'po' || m.status !== 'new' ? matches(m) : []

@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom'
 import { Badge, Button, Card, ErrorBox, Input, OkBox } from '../components/ui'
 import AddProduct from '../components/AddProduct'
 import OrderReview from '../components/OrderReview'
+import GtForm from '../components/GtForm'
 import { useAuth } from '../lib/auth'
 import { isBulk, loadCatalog, productLabel, searchProducts, useCatalog, type Catalog, type Product } from '../lib/catalog'
 import { nameSimilarity, norm, tidy } from '../lib/match'
@@ -53,7 +54,7 @@ type PoItem = RawItem & { ean?: string; rate?: number; basic?: number }
 
 type OnRead = (text: string, files: File[], source: string, sheetItems?: PoItem[], po?: PoRead | null) => void
 
-function InputStep({ onRead, onBlank }: { onRead: OnRead; onBlank: () => void }) {
+function InputStep({ onRead, onGt }: { onRead: OnRead; onGt: () => void }) {
   const [mode, setMode] = useState<'pick' | 'paste'>('pick')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState('')
@@ -118,9 +119,9 @@ function InputStep({ onRead, onBlank }: { onRead: OnRead; onBlank: () => void })
       <div className="grid grid-cols-2 gap-3">
         {([
           ['💬', 'WhatsApp', 'Paste the order message', () => setMode('paste')],
-          ['📷', 'Photo', 'Screenshot or photo of the order', () => imgRef.current?.click()],
           ['📄', 'PO', 'Upload the PO (PDF or Excel)', () => poRef.current?.click()],
-          ['✏️', 'Custom', 'Type the order yourself', onBlank],
+          ['📷', 'Photo', 'Screenshot or photo of the order', () => imgRef.current?.click()],
+          ['📝', 'GT form', 'Party + products, for field sales', onGt],
         ] as [string, string, string, () => void][]).map(([icon, label, hint, go]) => (
           <button key={label} type="button" onClick={go}
             className="flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border-2 border-ae-blue/20 bg-white text-xl font-bold text-ae-blue shadow-sm active:bg-ae-blue/5 sm:aspect-[4/3]">
@@ -383,7 +384,7 @@ export default function NewOrder() {
   const { me } = useAuth()
   const { catalog } = useCatalog()
   const [draft, setDraft] = useState<Draft>(() => emptyDraft(me?.id ?? null))
-  const [step, setStep] = useState<'input' | 'questions' | 'review'>('input')
+  const [step, setStep] = useState<'input' | 'questions' | 'review' | 'gt'>('input')
   const [an, setAn] = useState<Analysis | null>(null)
   const [queue, setQueue] = useState<Q[]>([])
   const [at, setAt] = useState(0)
@@ -498,14 +499,6 @@ export default function NewOrder() {
     setStep('questions')
   }
 
-  const startBlank = () => {
-    setAn({ read: null, items: [], guess: { matches: [], sure: false, nameLine: null }, names: [] })
-    setDraft(emptyDraft(me?.id ?? null))
-    setQueue([{ kind: 'customer' }, { kind: 'channel' }])
-    setAt(0)
-    setAsked(0)
-    setStep('questions')
-  }
 
   /** Is this question still worth asking, given the answers so far? */
   const relevant = (q: Q, d: Draft): boolean => {
@@ -538,12 +531,20 @@ export default function NewOrder() {
 
   if (!catalog) return <p className="text-sm text-stone-500">Loading products…</p>
 
+  if (step === 'gt') {
+    return (
+      <div className="mx-auto max-w-xl space-y-3">
+        <h2 className="text-xl font-bold text-ae-blue">GT order</h2>
+        <GtForm onBack={() => setStep('input')} />
+      </div>
+    )
+  }
   if (step === 'input' && inboxId) return mailError ? <ErrorBox>{mailError}</ErrorBox> : <Card className="py-10 text-center"><p className="text-lg font-semibold text-ae-blue">Reading the email PO…</p></Card>
   if (step === 'input') {
     return (
       <div className="mx-auto max-w-xl space-y-4">
         <h2 className="text-xl font-bold text-ae-blue">New order</h2>
-        <InputStep onRead={start} onBlank={startBlank} />
+        <InputStep onRead={start} onGt={() => setStep('gt')} />
       </div>
     )
   }

@@ -6,10 +6,9 @@ import { CHANNELS } from '../lib/channels'
 import { fetchAll } from '../lib/catalog'
 import { norm } from '../lib/match'
 import { rupees, todayIST } from '../lib/stages'
-import { supabase } from '../lib/supabase'
 
 interface Inv {
-  id: string; order_no: string; invoice_no: string; invoice_date: string; invoice_value: number; shared_with: string | null
+  id: string; order_no: string; invoice_no: string; invoice_date: string; invoice_value: number
   customer_name: string; gstin: string | null; channel: string; stage: string; dispatch_date: string | null; courier: string | null; tracking_no: string | null
 }
 
@@ -18,7 +17,6 @@ const day = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numer
 
 export default function Invoices() {
   const [rows, setRows] = useState<Inv[] | null>(null)
-  const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [q, setQ] = useState('')
   const [from, setFrom] = useState(todayIST().slice(0, 8) + '01')
   const [to, setTo] = useState('')
@@ -26,11 +24,8 @@ export default function Invoices() {
   const [status, setStatus] = useState('')
 
   useEffect(() => {
-    Promise.all([
-      fetchAll<Inv>('orders', 'id, order_no, invoice_no, invoice_date, invoice_value, shared_with, customer_name, gstin, channel, stage, dispatch_date, courier, tracking_no',
-        (x) => x.not('invoice_no', 'is', null).neq('stage', 'cancelled').order('invoice_date', { ascending: false }).order('invoice_no', { ascending: false })),
-      supabase.from('people').select('id, name'),
-    ]).then(([r, p]) => { setRows(r); setPeople(new Map((p.data ?? []).map((x) => [x.id, x.name]))) })
+    fetchAll<Inv>('orders', 'id, order_no, invoice_no, invoice_date, invoice_value, customer_name, gstin, channel, stage, dispatch_date, courier, tracking_no',
+      (x) => x.not('invoice_no', 'is', null).neq('stage', 'cancelled').order('invoice_date', { ascending: false }).order('invoice_no', { ascending: false })).then(setRows)
   }, [])
 
   const list = useMemo(() => (rows ?? []).filter((r) => {
@@ -49,7 +44,7 @@ export default function Invoices() {
     const X = await import('xlsx')
     const ws = X.utils.json_to_sheet(list.map((r) => ({
       'Invoice no.': r.invoice_no, 'Invoice date': r.invoice_date, 'Value': Number(r.invoice_value), 'Customer': r.customer_name, 'GSTIN': r.gstin ?? '',
-      'Channel': r.channel, 'Order no.': r.order_no, 'Shared with': people.get(r.shared_with ?? '') ?? '',
+      'Channel': r.channel, 'Order no.': r.order_no,
       'Dispatched': sent(r) ? 'Yes' : 'Not yet', 'Dispatch date': r.dispatch_date ?? '', 'Courier': r.courier ?? '', 'Tracking': r.tracking_no ?? '',
     })))
     const wb = X.utils.book_new()
@@ -79,7 +74,7 @@ export default function Invoices() {
         <Card className="overflow-x-auto p-0 sm:p-0">
           <table className="w-full text-left text-sm">
             <thead className="bg-ae-cream/60 text-xs uppercase text-stone-500">
-              <tr>{['Invoice', 'Date', 'Customer', 'Value', 'Shared with', 'Dispatch'].map((h) => <th key={h} className="whitespace-nowrap px-3 py-2">{h}</th>)}</tr>
+              <tr>{['Invoice', 'Date', 'Customer', 'Value', 'Dispatch'].map((h) => <th key={h} className="whitespace-nowrap px-3 py-2">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {list.map((r) => (
@@ -88,12 +83,11 @@ export default function Invoices() {
                   <td className="whitespace-nowrap px-3 py-2">{day(r.invoice_date)}</td>
                   <td className="px-3 py-2">{r.customer_name}<div className="text-xs text-stone-500">{r.channel}</div></td>
                   <td className="whitespace-nowrap px-3 py-2">{rupees(r.invoice_value)}</td>
-                  <td className="px-3 py-2">{people.get(r.shared_with ?? '') ?? '—'}</td>
                   <td className="px-3 py-2">{sent(r) ? <span className="text-green-800">{r.courier} {r.tracking_no}</span> : <span className="font-semibold text-red-700">Not yet</span>}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr className="border-t-2 border-stone-200 font-semibold"><td className="px-3 py-2" colSpan={3}>Total</td><td className="whitespace-nowrap px-3 py-2">{rupees(total)}</td><td colSpan={2} /></tr></tfoot>
+            <tfoot><tr className="border-t-2 border-stone-200 font-semibold"><td className="px-3 py-2" colSpan={3}>Total</td><td className="whitespace-nowrap px-3 py-2">{rupees(total)}</td><td /></tr></tfoot>
           </table>
         </Card>
       )}

@@ -130,18 +130,14 @@ export function PlanPage() {
 }
 
 // ---------- Invoice: accounts enters the Tally invoice for each planned order ----------
-interface Inv { invoice_no: string; invoice_date: string; invoice_value: string; shared_with: string; file?: File }
+interface Inv { invoice_no: string; invoice_date: string; invoice_value: string; file?: File }
 
-export function InvoiceFields({ v, set, people }: { v: Inv; set: (v: Inv) => void; people: { id: string; name: string }[] }) {
+export function InvoiceFields({ v, set }: { v: Inv; set: (v: Inv) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <Input className="col-span-2 sm:col-span-1" placeholder="Invoice no." value={v.invoice_no} onChange={(e) => set({ ...v, invoice_no: e.target.value })} aria-label="Invoice no." />
       <Input type="date" value={v.invoice_date} onChange={(e) => set({ ...v, invoice_date: e.target.value })} aria-label="Invoice date" />
       <Input inputMode="decimal" placeholder="Value ₹" value={v.invoice_value} onChange={(e) => set({ ...v, invoice_value: e.target.value.replace(/[^\d.]/g, '') })} aria-label="Invoice value" />
-      <Select value={v.shared_with} onChange={(e) => set({ ...v, shared_with: e.target.value })} aria-label="Shared with">
-        <option value="">Shared with…</option>
-        {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </Select>
       <label className="flex min-h-12 cursor-pointer items-center justify-center truncate rounded-lg border border-dashed border-stone-300 bg-white px-2 text-sm font-semibold text-ae-blue">
         {v.file ? `📎 ${v.file.name}` : '📎 PDF'}
         <input type="file" accept="application/pdf,image/*" hidden onChange={(e) => set({ ...v, file: e.target.files?.[0] })} />
@@ -150,7 +146,7 @@ export function InvoiceFields({ v, set, people }: { v: Inv; set: (v: Inv) => voi
   )
 }
 
-export const invReady = (v?: Inv) => !!v && !!v.invoice_no.trim() && !!v.invoice_date && Number(v.invoice_value) > 0 && !!v.shared_with
+export const invReady = (v?: Inv) => !!v && !!v.invoice_no.trim() && !!v.invoice_date && Number(v.invoice_value) > 0
 
 export async function saveInvoices(entries: [string, Inv][]): Promise<number> {
   const { data, error } = await supabase.rpc('record_invoices', { p: entries.map(([id, v]) => ({ id, ...v, file: undefined })) })
@@ -160,19 +156,13 @@ export async function saveInvoices(entries: [string, Inv][]): Promise<number> {
   return data as number
 }
 
-export function usePeople() {
-  const [people, setPeople] = useState<{ id: string; name: string }[]>([])
-  useEffect(() => { supabase.from('people').select('id, name').eq('active', true).order('name').then(({ data }) => setPeople(data ?? [])) }, [])
-  return people
-}
 
-export const blankInv = (o: { estimate_value: number; planned_by: string | null }): Inv =>
-  ({ invoice_no: '', invoice_date: todayIST(), invoice_value: o.estimate_value ? String(o.estimate_value) : '', shared_with: o.planned_by ?? '' })
+export const blankInv = (o: { estimate_value: number }): Inv =>
+  ({ invoice_no: '', invoice_date: todayIST(), invoice_value: o.estimate_value ? String(o.estimate_value) : '' })
 
 export function InvoicePage() {
   const { me } = useAuth()
   const { rows, load } = useStageRows('planned')
-  const people = usePeople()
   const [vals, setVals] = useState<Record<string, Inv>>({})
   const [tab, setTab] = useState('todo')
   const [msg, setMsg] = useState('')
@@ -207,7 +197,7 @@ export function InvoicePage() {
                   <li key={i} className="flex justify-between gap-2"><span>{l.qty} × {l.tally_name ?? <span>{l.product_name} <span className="text-xs text-amber-700">(no Tally name)</span></span>}</span><span className="whitespace-nowrap text-stone-500">{rupees(l.rate)}</span></li>
                 ))}
               </ul>
-              {allowed && vals[o.id] && <InvoiceFields v={vals[o.id]} set={(v) => setVals({ ...vals, [o.id]: v })} people={people} />}
+              {allowed && vals[o.id] && <InvoiceFields v={vals[o.id]} set={(v) => setVals({ ...vals, [o.id]: v })} />}
             </Card>
           </li>
         ))}

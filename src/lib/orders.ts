@@ -71,6 +71,7 @@ export interface Draft {
   files: File[]
   learn_customer_alias: string | null
   inbox_id?: string | null // the email this PO came from
+  confirm?: boolean // completing a sales order: it becomes a New order when saved
 }
 
 export const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
@@ -105,7 +106,7 @@ export function mustHave(d: Draft): string[] {
   const m: string[] = []
   if (!d.channel) m.push('channel')
   if (!d.customer_name.trim()) m.push('customer')
-  if (!d.phone.trim() && !['po_file', 'email'].includes(d.source)) m.push('phone number') // chain POs carry no phone
+  if (!d.phone.trim() && !['po_file', 'email', 'gt_form'].includes(d.source)) m.push('phone number') // chain POs and GT forms may have no phone
   if (!d.lines.length) m.push('at least one product')
   if (d.lines.some((l) => !l.qty || l.qty <= 0)) m.push('a quantity for every product')
   return m

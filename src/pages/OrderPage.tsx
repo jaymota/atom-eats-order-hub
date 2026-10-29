@@ -12,7 +12,7 @@ import { supabase } from '../lib/supabase'
 import { todoChanged } from '../lib/todo'
 import { isBulkPack } from '../lib/match'
 import { StageBadge } from './Orders'
-import { DispatchFields, InvoiceFields, blankDisp, blankInv, dispReady, invReady, saveDispatches, saveInvoices, saveTracking, savedDisp, usePeople } from './Todo'
+import { DispatchFields, InvoiceFields, blankDisp, blankInv, dispReady, invReady, saveDispatches, saveInvoices, saveTracking, savedDisp } from './Todo'
 
 interface Order {
   id: string; order_no: string; stage: Stage; channel: string; order_date: string; received_at: string; salesperson_id: string | null
@@ -37,7 +37,7 @@ export default function OrderPage() {
   const { id } = useParams()
   const { me } = useAuth()
   const navigate = useNavigate()
-  const loc = useLocation() as { state?: { saved?: string } }
+  const loc = useLocation() as { state?: { saved?: string; complete?: boolean } }
   const [o, setO] = useState<Order | null>(null)
   const [lines, setLines] = useState<Line[]>([])
   const [files, setFiles] = useState<(FileRow & { url?: string })[]>([])
@@ -74,6 +74,10 @@ export default function OrderPage() {
     setPeople(new Map((pp.data ?? []).map((p) => [p.id, p.name])))
   }, [id])
   useEffect(() => { load() }, [load])
+  // Opened with "Complete" from To confirm: go straight to filling in the sales order.
+  useEffect(() => {
+    if (loc.state?.complete && id) loadDraft(id).then((d) => setEdit({ ...d, confirm: true }))
+  }, [id, loc.state?.complete])
 
   if (notFound) return <ErrorBox>Order not found.</ErrorBox>
   if (!o) return <p className="text-sm text-stone-500">Loading…</p>
@@ -81,14 +85,14 @@ export default function OrderPage() {
   if (edit) {
     return (
       <div className="space-y-3">
-        <h2 className="text-xl font-bold text-ae-blue">Edit {o.order_no}</h2>
-        <OrderReview draft={edit} setDraft={setEdit} onBack={() => setEdit(null)} onSaved={(no) => { setEdit(null); setSavedMsg(`Order ${no} saved.`); load() }} />
+        <h2 className="text-xl font-bold text-ae-blue">{edit.confirm ? 'Complete' : 'Edit'} {o.order_no}</h2>
+        <OrderReview draft={edit} setDraft={setEdit} onBack={() => setEdit(null)} onSaved={(no) => { setSavedMsg(edit.confirm ? `${no} confirmed. It is now in Plan.` : `Order ${no} saved.`); setEdit(null); load() }} />
       </div>
     )
   }
 
   const late = isLate(o.stage, o.received_at)
-  const canEdit = ['new', 'on_hold'].includes(o.stage) || me?.role === 'super_admin' || me?.role === 'admin'
+  const canEdit = ['sales_order', 'new', 'on_hold'].includes(o.stage) || me?.role === 'super_admin' || me?.role === 'admin'
   const canHold = ['super_admin', 'admin', 'ops'].includes(me?.role ?? '')
   const deliverTo = o.same_as_billing
     ? [o.customer_name, o.billing_address, o.billing_city, o.billing_state, o.billing_pin]
@@ -140,7 +144,13 @@ export default function OrderPage() {
         </div>
       </div>
 
-      {o.missing.length > 0 && (
+      {o.stage === 'sales_order' && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ae-pink bg-ae-pink/40 px-3 py-3 text-sm text-ae-blue">
+          <span><b>Sales order</b>{o.salesperson_id && <> from {people.get(o.salesperson_id)}</>}. Add the details, then confirm.</span>
+          {canHold && <Button className="min-h-10 px-4 text-sm" onClick={async () => setEdit({ ...(await loadDraft(o.id)), confirm: true })}>Complete</Button>}
+        </div>
+      )}
+      {o.missing.length > 0 && o.stage !== 'sales_order' && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <b>Missing information</b> (needed before dispatch planning): {o.missing.join(', ')}. {canEdit && <button type="button" className="font-semibold underline" onClick={async () => setEdit(await loadDraft(o.id))}>Fill it in</button>}
         </div>
@@ -155,7 +165,6 @@ export default function OrderPage() {
           <h3 className="mb-2 font-semibold text-ae-blue">Invoice and dispatch</h3>
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             {field('Invoice', `${o.invoice_no} · ${o.invoice_date ?? ''} · ${rupees(o.invoice_value)}`)}
-            {field('Shared with', people.get(o.shared_with ?? '') ?? null)}
             {o.dispatch_date && field('Dispatched', [o.dispatch_date, o.courier, o.tracking_no ?? (o.courier === 'Customer pickup' ? null : 'tracking to follow'), o.boxes ? `${o.boxes} box${o.boxes === 1 ? '' : 'es'}` : null].filter(Boolean).join(' · '))}
             {o.dispatch_note && field('Dispatch note', o.dispatch_note)}
             {o.delivered_at && field('Delivered', istDateTime(o.delivered_at))}
@@ -265,7 +274,6 @@ export default function OrderPage() {
 
 // ---------- The next step for this order, depending on its stage and who is looking ----------
 function NextStep({ o, lines, role, onDone, onError }: { o: Order; lines: Line[]; role?: string; onDone: (msg: string) => void; onError: (e: string) => void }) {
-  const people = usePeople()
   const [inv, setInv] = useState(() => blankInv(o))
   const [disp, setDisp] = useState(() => ({ ...blankDisp(o), on: true }))
   const [date, setDate] = useState(todayIST())
@@ -293,7 +301,7 @@ function NextStep({ o, lines, role, onDone, onError }: { o: Order; lines: Line[]
   } else if (o.stage === 'planned' && can.invoice(role)) {
     body = (
       <div className="space-y-2">
-        <InvoiceFields v={inv} set={setInv} people={people} />
+        <InvoiceFields v={inv} set={setInv} />
         <Button disabled={busy || !invReady(inv)} onClick={() => run(async () => { await saveInvoices([[o.id, inv]]); return 'Invoice saved.' })}>Save invoice</Button>
       </div>
     )

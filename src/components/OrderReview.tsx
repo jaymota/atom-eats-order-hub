@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { isBulk, productLabel, useCatalog } from '../lib/catalog'
 import { GST_STATES, gstinState } from '../lib/match'
 import {
-  BASIS_LABEL, COURIERS, PAYMENT_TYPES, PO_CHANNELS, draftTotal, findRepeat, lineRate, mustHave, newKey, saveDraft, stateFromGstin, stillMissing,
+  BASIS_LABEL, applyCustomer, COURIERS, PAYMENT_TYPES, PO_CHANNELS, draftTotal, findRepeat, lineRate, mustHave, newKey, saveDraft, stateFromGstin, stillMissing,
   type Draft, type DraftLine, type PriceBasis,
 } from '../lib/orders'
 import { rupees } from '../lib/stages'
@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase'
 import { CHANNELS, CHANNEL_HINT } from '../lib/channels'
 import { ProductPicker } from '../pages/Checks'
 import AddProduct from './AddProduct'
+import CustomerSearch from './CustomerSearch'
 import { Button, Card, ErrorBox, Field, Input, Select } from './ui'
 import type { Product } from '../lib/catalog'
 
@@ -112,6 +113,11 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
 
       <Card>
         {sectionTitle(d.customer_id ? 'Customer' : 'Customer (new — will be saved)')}
+        {!d.customer_id && (
+          <div className="mb-3">
+            <CustomerSearch placeholder="Saved customer? Search name, phone, code" onPick={async (c) => setDraft(await applyCustomer(d, c.id))} />
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Company / store name ✱"><Input {...inp('customer_name')} /></Field>
           <Field label="Phone ✱"><Input type="tel" {...inp('phone')} /></Field>
@@ -242,9 +248,9 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
           <div className="flex flex-wrap gap-2">
             {onBack && <Button tone="plain" onClick={onBack}>Back</Button>}
             {missing.length === 0 ? (
-              <Button disabled={busy || must.length > 0} onClick={() => save(false)} className="flex-1">{busy ? 'Saving…' : d.id ? 'Save changes' : 'Save order'}</Button>
+              <Button disabled={busy || must.length > 0} onClick={() => save(false)} className="flex-1">{busy ? 'Saving…' : d.confirm ? 'Confirm order' : d.id ? 'Save changes' : 'Save order'}</Button>
             ) : (
-              <Button disabled={busy || must.length > 0} onClick={() => save(true)} className="flex-1">{busy ? 'Saving…' : 'Save anyway (missing info)'}</Button>
+              <Button disabled={busy || must.length > 0} onClick={() => save(true)} className="flex-1">{busy ? 'Saving…' : d.confirm ? 'Confirm anyway (missing info)' : 'Save anyway (missing info)'}</Button>
             )}
           </div>
         </div>

@@ -1,6 +1,7 @@
-export type Stage = 'new' | 'planned' | 'invoiced' | 'dispatched' | 'delivered' | 'on_hold' | 'cancelled'
+export type Stage = 'sales_order' | 'new' | 'planned' | 'invoiced' | 'dispatched' | 'delivered' | 'on_hold' | 'cancelled'
 
 export const STAGE_LABEL: Record<Stage, string> = {
+  sales_order: 'Sales order',
   new: 'New',
   planned: 'Planned for dispatch',
   invoiced: 'Invoice shared',
@@ -11,6 +12,7 @@ export const STAGE_LABEL: Record<Stage, string> = {
 }
 
 export const STAGE_TONE: Record<Stage, string> = {
+  sales_order: 'bg-ae-pink text-ae-blue',
   new: 'bg-sky-100 text-sky-800',
   planned: 'bg-violet-100 text-violet-800',
   invoiced: 'bg-amber-100 text-amber-800',
@@ -22,7 +24,7 @@ export const STAGE_TONE: Record<Stage, string> = {
 
 /** Late = not dispatched within 24 hours of the order arriving. */
 export function isLate(stage: Stage, receivedAt: string): boolean {
-  return ['new', 'planned', 'invoiced', 'on_hold'].includes(stage) && Date.now() - Date.parse(receivedAt) > 24 * 3_600_000
+  return ['sales_order', 'new', 'planned', 'invoiced', 'on_hold'].includes(stage) && Date.now() - Date.parse(receivedAt) > 24 * 3_600_000
 }
 
 /** "5 h", "2 d 3 h" since the order arrived. */

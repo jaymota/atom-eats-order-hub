@@ -48,7 +48,7 @@ const eeRows = sheet(file(/^ProductAttribute.*\.csv$/))
 const products = new Map()
 for (const r of eeRows) {
   const sku = clean(r.SKU)
-  if (!sku) continue
+  if (!sku || /-\s*FBA$/i.test(sku)) continue // Amazon FBA stock is never an offline order
   products.set(sku, {
     sku,
     name: clean(r.ProductName),

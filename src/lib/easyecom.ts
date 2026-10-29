@@ -134,7 +134,7 @@ export function masterRows(orders: EeOrder[], people: Map<string, string>): Reco
       'SKU': l.sku, 'Product': l.product_name ?? '', 'Tally item': l.tally_name ?? '', 'HSN': l.hsn ?? '', 'Qty': l.qty, 'Rate (incl. GST)': l.rate ?? '',
       'GST %': l.gst_rate ?? '', 'Line value': Number(l.value), 'MRP': isBulkPack(l.product_name) ? '' : l.mrp ?? '',
       'Shipping (order)': l === o.order_lines[0] ? Number(o.shipping_charge) || '' : '',
-      'Invoice no.': o.invoice_no ?? '', 'Invoice date': o.invoice_date ?? '', 'Invoice value': o.invoice_value ?? '', 'Shared with': people.get(o.shared_with ?? '') ?? '',
+      'Invoice no.': o.invoice_no ?? '', 'Invoice date': o.invoice_date ?? '', 'Invoice value': o.invoice_value ?? '',
       'Dispatch date': o.dispatch_date ?? '', 'Courier': o.courier ?? '', 'Tracking': o.tracking_no ?? '', 'In Easy Ecom': o.ee_uploaded_at ? 'Yes' : 'No',
     }))
   })

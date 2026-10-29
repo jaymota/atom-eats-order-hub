@@ -425,3 +425,6 @@ verify_jwt = false
 
 [functions.notify]
 verify_jwt = false
+
+[functions.inbox]
+verify_jwt = false

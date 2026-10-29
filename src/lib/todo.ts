@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from './supabase'
 
-export interface TodoCounts { plan: number; invoice: number; dispatch: number }
+export interface TodoCounts { confirm: number; plan: number; invoice: number; dispatch: number }
 
 export async function loadTodoCounts(): Promise<TodoCounts> {
   const c = (stage: string) => supabase.from('orders').select('id', { count: 'exact', head: true }).eq('stage', stage)
-  const [a, b, d] = await Promise.all([c('new'), c('planned'), c('invoiced')])
-  return { plan: a.count ?? 0, invoice: b.count ?? 0, dispatch: d.count ?? 0 }
+  const mail = supabase.from('inbox_emails').select('id', { count: 'exact', head: true }).eq('status', 'new').in('kind', ['po', 'revised', 'grn'])
+  const [a, b, d, m] = await Promise.all([c('new'), c('planned'), c('invoiced'), mail])
+  return { confirm: m.count ?? 0, plan: a.count ?? 0, invoice: b.count ?? 0, dispatch: d.count ?? 0 }
 }
 
 /** Tell the menu badges to count again (after an order moves on). */

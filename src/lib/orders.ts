@@ -26,6 +26,7 @@ export interface DraftLine {
   rate: number | null
   learn: boolean // the person picked this product for what the message said: remember it
   ean_seen?: string | null // barcode printed on the PO for this line (remembered once confirmed)
+  code_seen?: string | null // the buyer's own item code on the PO (remembered once confirmed)
 }
 
 export interface Draft {
@@ -69,6 +70,7 @@ export interface Draft {
   source_text: string
   files: File[]
   learn_customer_alias: string | null
+  inbox_id?: string | null // the email this PO came from
 }
 
 export const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
@@ -103,7 +105,7 @@ export function mustHave(d: Draft): string[] {
   const m: string[] = []
   if (!d.channel) m.push('channel')
   if (!d.customer_name.trim()) m.push('customer')
-  if (!d.phone.trim()) m.push('phone number')
+  if (!d.phone.trim() && !['po_file', 'email'].includes(d.source)) m.push('phone number') // chain POs carry no phone
   if (!d.lines.length) m.push('at least one product')
   if (d.lines.some((l) => !l.qty || l.qty <= 0)) m.push('a quantity for every product')
   return m
@@ -258,7 +260,7 @@ export async function saveDraft(d: Draft): Promise<SaveResult> {
     ...d, ...del, customer_id: customerId, address_id: addressId,
     margin_pct: d.margin_pct == null ? '' : String(d.margin_pct),
     lines: d.lines.map((l) => ({ sku: l.sku, qty: l.qty, price_basis: l.price_basis ?? '', margin_pct: l.margin_pct ?? '', rate: l.rate ?? '', typed_as: l.typed_as ?? '' })),
-    files: undefined, id: undefined, learn_customer_alias: undefined,
+    files: undefined, id: undefined, learn_customer_alias: undefined, inbox_id: undefined,
   }
   const { data: id, error } = await supabase.rpc('save_order', { p_id: d.id, p: payload })
   if (error) throw error
@@ -283,6 +285,10 @@ export async function saveDraft(d: Draft): Promise<SaveResult> {
   for (const l of d.lines) {
     if (l.ean_seen && catalog.bySku.get(l.sku)?.ean !== l.ean_seen) { await supabase.rpc('learn_ean', { p_sku: l.sku, p_ean: l.ean_seen }); learnt = true }
   }
+  for (const l of d.lines) {
+    if (l.code_seen) { await supabase.rpc('learn_item_code', { p_sku: l.sku, p_code: l.code_seen, p_customer: customerId }); learnt = true }
+  }
+  if (d.inbox_id) await supabase.rpc('inbox_done', { p_email: d.inbox_id, p_order: id })
   if (learnt) loadCatalog(true)
   loadCustomersLite(true)
   const { data: o } = await supabase.from('orders').select('order_no').eq('id', id).single()

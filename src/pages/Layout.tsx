@@ -10,6 +10,7 @@ const ACC = ['super_admin', 'admin', 'accounts']
 const LINKS: L[] = [
   { to: '/', label: 'Home', end: true },
   { to: '/orders/new', label: '+ New order', end: true },
+  { to: '/inbox', label: 'To confirm', count: 'confirm', roles: [...OPS, 'sales'] },
   { to: '/plan', label: 'Plan', count: 'plan', roles: OPS },
   { to: '/invoice', label: 'Invoice', count: 'invoice', roles: ACC },
   { to: '/dispatch', label: 'Dispatch', count: 'dispatch', roles: OPS },

@@ -50,6 +50,7 @@ export async function readPdf(file: Blob, onProgress?: Progress): Promise<string
 export interface SheetRead {
   text: string
   items: (RawItem & { ean?: string; rate?: number; basic?: number; mrp?: number })[]
+  rows: unknown[][] // the first sheet, as it is
 }
 
 /** Reads an Excel PO. Finds the item table (description + quantity columns) when there is one. */
@@ -58,8 +59,10 @@ export async function readExcel(file: Blob): Promise<SheetRead> {
   const wb = X.read(await file.arrayBuffer(), { type: 'array' })
   const textParts: string[] = []
   const items: SheetRead['items'] = []
+  let first: unknown[][] = []
   for (const name of wb.SheetNames) {
     const rows = X.utils.sheet_to_json<string[]>(wb.Sheets[name], { header: 1, defval: '', raw: false })
+    if (!first.length) first = rows
     for (const r of rows) if (r.some((c) => String(c).trim())) textParts.push(r.map((c) => String(c).trim()).filter(Boolean).join('  '))
     const h = rows.findIndex((r) => r.some((c) => /descr|item name|product name|particular/i.test(String(c))) && r.some((c) => /^\s*(qty|quantity|order qty|units?)\b/i.test(String(c))))
     if (h < 0) continue
@@ -87,7 +90,7 @@ export async function readExcel(file: Blob): Promise<SheetRead> {
       })
     })
   }
-  return { text: textParts.join('\n'), items }
+  return { text: textParts.join('\n'), items, rows: first }
 }
 
 /** Shrinks a photo before saving it, so the 1 GB of free file space lasts for years. */
@@ -121,4 +124,30 @@ export async function readScannedPdf(file: Blob, onProgress?: Progress): Promise
     texts.push((await readImage(blob, onProgress)).text)
   }
   return texts.join('\n\n')
+}
+
+/** Reads all the files of one PO (e.g. Blinkit's Excel + PDF): the text, the Excel item rows, and a fixed reader's result. */
+export async function readPoFiles(files: (Blob & { name: string })[], subject = '', onProgress?: Progress) {
+  const { readPo } = await import('./po')
+  const parts: string[] = []
+  const poFiles: { name: string; text?: string; rows?: unknown[][] }[] = []
+  let sheetItems: SheetRead['items'] = []
+  for (const f of files) {
+    if (/\.(xlsx|xls|csv)$/i.test(f.name)) {
+      onProgress?.('Reading the Excel file…')
+      const r = await readExcel(f)
+      parts.push(r.text)
+      if (!sheetItems.length) sheetItems = r.items
+      poFiles.push({ name: f.name, rows: r.rows })
+    } else if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
+      let t = await readPdf(f, onProgress)
+      if (t.replace(/\s/g, '').length < 40) {
+        const { cleanOcr } = await import('./parse')
+        t = cleanOcr(await readScannedPdf(f, onProgress))
+      }
+      parts.push(t)
+      poFiles.push({ name: f.name, text: t })
+    }
+  }
+  return { text: parts.join('\n\n'), sheetItems, po: readPo(poFiles, subject) }
 }

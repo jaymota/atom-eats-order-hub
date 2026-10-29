@@ -5,6 +5,7 @@ import { Card } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { fetchAll } from '../lib/catalog'
 import { age, isLate, todayIST, type Stage } from '../lib/stages'
+import { useTodoCounts } from '../lib/todo'
 
 interface O { id: string; order_no: string; customer_name: string; stage: Stage; received_at: string; planned_at: string | null; invoiced_at: string | null; dispatch_date: string | null; missing: string[] }
 
@@ -14,6 +15,7 @@ const older = (iso: string | null) => !!iso && Date.now() - Date.parse(iso) > H2
 export default function Home() {
   const { me } = useAuth()
   const [rows, setRows] = useState<O[] | null>(null)
+  const counts = useTodoCounts()
   useEffect(() => {
     fetchAll<O>('orders', 'id, order_no, customer_name, stage, received_at, planned_at, invoiced_at, dispatch_date, missing',
       (q) => q.or(`stage.in.(new,planned,invoiced,on_hold),dispatch_date.eq.${todayIST()}`).order('received_at')).then(setRows)
@@ -22,6 +24,7 @@ export default function Home() {
   const r = rows ?? []
   const n = (s: Stage) => r.filter((o) => o.stage === s).length
   const tiles = [
+    ...(counts?.confirm ? [{ to: '/inbox', label: 'To confirm', n: counts.confirm }] : []),
     { to: '/plan', label: 'Plan', n: n('new') },
     { to: '/invoice', label: 'Invoice', n: n('planned') },
     { to: '/dispatch', label: 'Dispatch', n: n('invoiced') },

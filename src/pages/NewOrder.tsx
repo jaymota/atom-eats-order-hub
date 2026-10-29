@@ -1,6 +1,7 @@
 // The one order form for everyone: give the order as it is (paste, photo, PO file, or blank),
 // answer a few questions, check and save.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Badge, Button, Card, ErrorBox, Input, OkBox } from '../components/ui'
 import AddProduct from '../components/AddProduct'
 import OrderReview from '../components/OrderReview'
@@ -11,7 +12,8 @@ import {
   MESSAGE_TEMPLATE, applyCustomer, emptyDraft, loadCustomersLite, newKey, splitAddress, stateFromGstin, type Draft, type DraftLine,
 } from '../lib/orders'
 import { cleanOcr, readBarcodeRows, readMessage, type RawItem, type ReadMessage } from '../lib/parse'
-import { readExcel, readImage, readPdf, readScannedPdf } from '../lib/readers'
+import { readImage, readPoFiles } from '../lib/readers'
+import { CHANNEL_FOR, FORMAT_NAME, type PoLine, type PoRead } from '../lib/po'
 import { guessCustomerNames, resolveCustomer, resolveItems, type CustomerGuess, type CustomerLite, type ResolvedItem } from '../lib/resolve'
 import { supabase } from '../lib/supabase'
 import { CHANNELS, CHANNEL_HINT } from '../lib/channels'
@@ -38,7 +40,7 @@ function poLine(cat: Catalog, item: ResolvedItem, sku: string, qty: number | nul
   const gst = cat.bySku.get(sku)?.gst_rate ?? 5
   const rate = si.rate ?? (si.basic ? Math.round(si.basic * (1 + gst / 100) * 100) / 100 : null)
   return {
-    key: newKey(), sku, qty, typed_as: item.typed, learn: false, ean_seen: si.ean ?? null,
+    key: newKey(), sku, qty, typed_as: item.typed, learn: false, ean_seen: si.ean ?? null, code_seen: (si as PoLine).code ?? null,
     price_basis: rate != null ? 'po_rate' : cat.bySku.get(sku) && isBulk(cat.bySku.get(sku)!) ? 'agreed_rate' : null, margin_pct: null, rate,
   }
 }
@@ -49,7 +51,9 @@ const BIG = 'min-h-14 w-full rounded-xl border-2 px-4 py-3 text-left text-base f
 
 type PoItem = RawItem & { ean?: string; rate?: number; basic?: number }
 
-function InputStep({ onRead, onBlank }: { onRead: (text: string, files: File[], source: string, sheetItems?: PoItem[]) => void; onBlank: () => void }) {
+type OnRead = (text: string, files: File[], source: string, sheetItems?: PoItem[], po?: PoRead | null) => void
+
+function InputStep({ onRead, onBlank }: { onRead: OnRead; onBlank: () => void }) {
   const [mode, setMode] = useState<'pick' | 'paste'>('pick')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState('')
@@ -79,20 +83,13 @@ function InputStep({ onRead, onBlank }: { onRead: (text: string, files: File[], 
     }
   }
 
-  const fromPo = async (f: File) => {
+  // One PO can be several files (Blinkit: Excel with the items + PDF with the store and dates).
+  const fromPo = async (fs: File[]) => {
     setError('')
     try {
-      if (/\.(xlsx|xls|csv)$/i.test(f.name)) {
-        progress('Reading the Excel file…')
-        const r = await readExcel(f)
-        setBusy('')
-        onRead(r.text, [f], 'po_file', r.items)
-      } else {
-        let t = await readPdf(f, progress)
-        if (t.replace(/\s/g, '').length < 40) t = cleanOcr(await readScannedPdf(f, progress))
-        setBusy('')
-        onRead(t, [f], 'po_file')
-      }
+      const r = await readPoFiles(fs, '', progress)
+      setBusy('')
+      onRead(r.text, fs, 'po_file', r.sheetItems, r.po)
     } catch (e) {
       setBusy('')
       setError(`Couldn’t read the file: ${(e as Error).message}`)
@@ -133,7 +130,7 @@ function InputStep({ onRead, onBlank }: { onRead: (text: string, files: File[], 
         ))}
       </div>
       <input ref={imgRef} type="file" accept="image/*" multiple hidden onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ''; if (f.length) fromImages(f) }} />
-      <input ref={poRef} type="file" accept=".pdf,.xlsx,.xls,.csv,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) fromPo(f) }} />
+      <input ref={poRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf" hidden onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ''; if (f.length) fromPo(f) }} />
       <div className="pt-1 text-center">
         <button type="button" className="text-sm text-stone-500 underline" onClick={async () => {
           await navigator.clipboard.writeText(MESSAGE_TEMPLATE).catch(() => {})
@@ -393,16 +390,44 @@ export default function NewOrder() {
   const [asked, setAsked] = useState(0)
   const [info, setInfo] = useState('')
 
+  // Opened from "To confirm": read that email's attachments straight away.
+  const loc = useLocation() as { state?: { inboxId?: string } }
+  const inboxId = loc.state?.inboxId
+  const [mailError, setMailError] = useState('')
+  useEffect(() => {
+    if (!inboxId || !catalog) return
+    ;(async () => {
+      try {
+        const [{ data: e }, { data: fs }] = await Promise.all([
+          supabase.from('inbox_emails').select('subject, body_text').eq('id', inboxId).single(),
+          supabase.from('inbox_files').select('path, name, mime').eq('email_id', inboxId),
+        ])
+        const files: File[] = []
+        for (const f of fs ?? []) {
+          const { data } = await supabase.storage.from('order-files').download(f.path)
+          if (data) files.push(new File([data], f.name, { type: f.mime ?? data.type }))
+        }
+        const r = await readPoFiles(files, e?.subject ?? '')
+        await start(r.text || e?.body_text || '', files, 'email', r.sheetItems, r.po, inboxId)
+      } catch (err) { setMailError((err as Error).message) }
+    })()
+  }, [inboxId, catalog]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const basis = (d: Draft) => (d.channel === 'FOC' ? 'foc' : d.margin_pct != null ? 'mrp_minus_margin' : null)
   /** Bulk packs never use "MRP minus margin": they need an agreed rate. */
   const bulkLine = (sku: string) => { const p = catalog?.bySku.get(sku); return !!p && isBulk(p) }
 
-  const start = async (text: string, files: File[], source: string, sheetItems?: PoItem[]) => {
+  const start = async (text: string, files: File[], source: string, sheetItems?: PoItem[], po?: PoRead | null, inboxId?: string) => {
     const cat = catalog ?? (await loadCatalog())
     const team = (await supabase.from('people').select('name')).data?.map((p) => p.name) ?? []
     const read = readMessage(text, team)
-    // A PO: item rows from the Excel table, or barcode rows in the PDF; otherwise the message's lines.
-    const poRows: PoItem[] = sheetItems?.length ? sheetItems : source === 'po_file' ? readBarcodeRows(read.lines) : []
+    // A PO: a fixed reader's lines (Blinkit, Foodstories, Food Square, iStore), item rows from the Excel
+    // table, or barcode rows in the PDF; otherwise the message's lines.
+    const poRows: PoItem[] = po?.items.length ? po.items : sheetItems?.length ? sheetItems : ['po_file', 'email'].includes(source) ? readBarcodeRows(read.lines) : []
+    const byCode = (code?: string) => {
+      const sku = code ? cat.aliases.find((a) => a.kind === 'customer_code' && a.alias === code)?.sku : undefined
+      return sku ? cat.bySku.get(sku) : undefined
+    }
     const byEan = (ean?: string) => {
       if (!ean) return undefined
       const e = ean.replace(/^0(?=\d{12}$)/, '')
@@ -413,7 +438,7 @@ export default function NewOrder() {
     let items: ResolvedItem[]
     if (poRows.length) {
       items = poRows.map((si) => {
-        const hit = byEan(si.ean)
+        const hit = byEan(si.ean) ?? byCode((si as PoLine).code)
         if (hit) return { raw: si, typed: si.text, qty: si.qty, sku: hit.sku, options: [hit], sure: true }
         return resolveItems(cat, [{ ...si, qty: si.qty ?? 1 }]).map((r) => ({ ...r, qty: si.qty }))[0]
           ?? { raw: si, typed: si.text, qty: si.qty, sku: null, options: searchProducts(cat, si.text, { offlineOnly: true, limit: 3 }), sure: false }
@@ -422,7 +447,10 @@ export default function NewOrder() {
       items = resolveItems(cat, read.items)
     }
     const { list, aliases } = await loadCustomersLite()
-    const guess = resolveCustomer(list, aliases, read)
+    // With a fixed reader we know the store and its GSTIN: look the customer up by those alone.
+    const guess = po
+      ? resolveCustomer(list, aliases, { phones: [], gstins: po.gstin ? [po.gstin] : [], lines: [po.ship?.name || po.buyer], addressLines: new Set() })
+      : resolveCustomer(list, aliases, read)
     const names = guessCustomerNames(read.lines, read.addressLines, read.billingStart, new Set(items.map((i) => i.raw.line)), read.deliveryStart)
     const analysis: Analysis = { read, items, guess, names }
 
@@ -433,8 +461,28 @@ export default function NewOrder() {
       gstin: read.gstins[0] ?? '', gst_status: read.gstins[0] ? 'registered' : '', billing_state: stateFromGstin(read.gstins[0] ?? ''),
       po_number: read.poNumbers[0] ?? '', margin_pct: read.margin,
     }
+    if (po) {
+      d = {
+        ...d, inbox_id: inboxId ?? null, channel: CHANNEL_FOR[po.format] ?? '', po_number: po.po_number, po_date: po.po_date, needed_by: po.delivery_date,
+        gstin: po.gstin, gst_status: po.gstin ? 'registered' : '', billing_state: stateFromGstin(po.gstin), phone: '', email: '',
+      }
+      if (po.ship) {
+        Object.assign(d, { same_as_billing: false, delivery_name: po.ship.name, delivery_address: po.ship.address, delivery_city: po.ship.city,
+          delivery_state: po.ship.state, delivery_pin: po.ship.pin, delivery_gstin: po.ship.gstin })
+      }
+    } else if (inboxId) d.inbox_id = inboxId
     d.lines = items.filter((i) => i.sure && i.sku).map((i) => poLine(cat, i, i.sku!, i.qty))
     if (guess.sure) d = await applyCustomer({ ...d, learn_customer_alias: guess.nameLine }, guess.matches[0].c.id)
+    if (po?.ship) Object.assign(d, { same_as_billing: false, address_id: null, delivery_name: po.ship.name, delivery_address: po.ship.address,
+      delivery_city: po.ship.city, delivery_state: po.ship.state, delivery_pin: po.ship.pin, delivery_gstin: po.ship.gstin }) // the PO's own address wins
+
+    // A PO number we already have: a revised PO updates that order while it hasn't moved on.
+    let note = ''
+    if (d.po_number && !d.id) {
+      const { data: prev } = await supabase.from('orders').select('id, order_no, stage').eq('po_number', d.po_number).neq('stage', 'cancelled').limit(1).maybeSingle()
+      if (prev && ['new', 'on_hold'].includes(prev.stage)) { d.id = prev.id; note = `Revised PO: this updates ${prev.order_no}.` }
+      else if (prev) note = `PO ${d.po_number} is already ${prev.order_no} (${prev.stage}). Tell accounts before saving a new one.`
+    }
 
     const qs: Q[] = []
     if (!guess.sure) qs.push({ kind: 'customer' })
@@ -445,7 +493,8 @@ export default function NewOrder() {
     setQueue(qs)
     setAt(0)
     setAsked(0)
-    setInfo(guess.sure ? `Customer found: ${guess.matches[0].c.name} (${guess.matches[0].why}).` : '')
+    setInfo([po ? `${FORMAT_NAME[po.format]} PO ${po.po_number}: ${po.items.length} products read.` : '', guess.sure ? `Customer: ${guess.matches[0].c.name}.` : '', note].filter(Boolean).join(' '))
+    if (po?.ship) qs.splice(qs.findIndex((x) => x.kind === 'address'), 1) // the PO gives the delivery address
     setStep('questions')
   }
 
@@ -489,6 +538,7 @@ export default function NewOrder() {
 
   if (!catalog) return <p className="text-sm text-stone-500">Loading products…</p>
 
+  if (step === 'input' && inboxId) return mailError ? <ErrorBox>{mailError}</ErrorBox> : <Card className="py-10 text-center"><p className="text-lg font-semibold text-ae-blue">Reading the email PO…</p></Card>
   if (step === 'input') {
     return (
       <div className="mx-auto max-w-xl space-y-4">
@@ -504,6 +554,7 @@ export default function NewOrder() {
         <div>
           <h2 className="text-xl font-bold text-ae-blue">Check and save</h2>
           {an?.read && <p className="text-sm text-stone-600">Read from the {draft.source === 'paste' ? 'message' : draft.source === 'screenshot' ? 'picture' : 'PO'}: {draft.lines.length} products, {asked} {asked === 1 ? 'question' : 'questions'} asked.</p>}
+          <OkBox>{info}</OkBox>
         </div>
         <OrderReview draft={draft} setDraft={setDraft} onBack={() => { setStep('input'); setDraft(emptyDraft(me?.id ?? null)) }} />
       </div>

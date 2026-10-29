@@ -7,6 +7,7 @@ import Customers from './pages/Customers'
 import Downloads from './pages/Downloads'
 import ChoosePin from './pages/ChoosePin'
 import Home from './pages/Home'
+import Inbox from './pages/Inbox'
 import Invoices from './pages/Invoices'
 import Layout from './pages/Layout'
 import Login from './pages/Login'
@@ -34,6 +35,7 @@ function Gate() {
           <Route path="orders" element={<Orders />} />
           <Route path="orders/new" element={<NewOrder />} />
           <Route path="orders/:id" element={<OrderPage />} />
+          <Route path="inbox" element={<Inbox />} />
           <Route path="plan" element={<PlanPage />} />
           <Route path="invoice" element={<InvoicePage />} />
           <Route path="dispatch" element={<DispatchPage />} />

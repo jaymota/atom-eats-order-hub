@@ -44,7 +44,10 @@ Deno.serve(async (req) => {
       source = known(body.toLowerCase()) ?? 'forwarded' // "---------- Forwarded message --------- From: ordering@partnersbiz.com"
     }
   }
-  const kind = /\bGRN\b/i.test(subject) ? 'grn' : /revised/i.test(subject) ? 'revised' : source ? 'po' : 'other'
+  // Payment advice, statements, credit / debit notes are not orders, even from a PO sender.
+  const fileNames = (Array.isArray(m.attachments) ? m.attachments : []).map((a: { name?: string }) => String(a.name ?? '')).join(' ')
+  const notOrder = /payment|remittance|statement|ledger|debit note|credit note|\bbill\b|advice/i.test(`${subject} ${fileNames}`) && !/purchase\s*order|\bP\.?O\b/i.test(subject)
+  const kind = /\bGRN\b/i.test(subject) ? 'grn' : notOrder ? 'other' : /revised/i.test(subject) ? 'revised' : source ? 'po' : 'other'
 
   const { data: e, error } = await db.from('inbox_emails').insert({
     gmail_id: gmailId, thread_id: String(m.threadId ?? '') || null, from_addr: from, from_name: String(m.fromName ?? '').slice(0, 200) || null,

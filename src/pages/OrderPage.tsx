@@ -92,7 +92,8 @@ export default function OrderPage() {
   }
 
   const late = isLate(o.stage, o.received_at)
-  const canEdit = ['sales_order', 'new', 'on_hold'].includes(o.stage) || me?.role === 'super_admin' || me?.role === 'admin'
+  const canEdit = me?.role !== 'accounts' && (['sales_order', 'new', 'on_hold'].includes(o.stage) || me?.role === 'super_admin' || me?.role === 'admin')
+  const back = me?.role === 'sales' ? ['/orders/new', '← New order'] : me?.role === 'accounts' ? ['/invoices', '← All invoices'] : ['/orders', '← All orders']
   const canHold = ['super_admin', 'admin', 'ops'].includes(me?.role ?? '')
   const deliverTo = o.same_as_billing
     ? [o.customer_name, o.billing_address, o.billing_city, o.billing_state, o.billing_pin]
@@ -126,7 +127,7 @@ export default function OrderPage() {
       <OkBox>{savedMsg}</OkBox>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link to="/orders" className="text-sm text-stone-500 underline">← All orders</Link>
+          <Link to={back[0]} className="text-sm text-stone-500 underline">{back[1]}</Link>
           <h2 className="text-2xl font-bold text-ae-blue">{o.order_no} · {o.customer_name}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-stone-600">
             <StageBadge stage={o.stage} />
@@ -267,7 +268,7 @@ export default function OrderPage() {
           </div>
         </Card>
       </div>
-      <div className="pb-6"><button type="button" className="text-sm text-stone-500 underline" onClick={() => navigate('/orders/new')}>Enter another order</button></div>
+      {me?.role !== 'accounts' && <div className="pb-6"><button type="button" className="text-sm text-stone-500 underline" onClick={() => navigate('/orders/new')}>Enter another order</button></div>}
     </div>
   )
 }

@@ -3,20 +3,19 @@ import { Logo } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { ROLE_NAMES } from '../lib/format'
 import { useTodoCounts, type TodoCounts } from '../lib/todo'
+import { mayOpen } from '../lib/access'
 
-type L = { to: string; label: string; end?: boolean; count?: keyof TodoCounts; roles?: string[] }
-const OPS = ['super_admin', 'admin', 'ops']
-const ACC = ['super_admin', 'admin', 'accounts']
+type L = { to: string; label: string; end?: boolean; count?: keyof TodoCounts }
 const LINKS: L[] = [
   { to: '/', label: 'Home', end: true },
   { to: '/orders/new', label: '+ New order', end: true },
-  { to: '/inbox', label: 'To confirm', count: 'confirm', roles: [...OPS, 'sales'] },
-  { to: '/plan', label: 'Plan', count: 'plan', roles: OPS },
-  { to: '/invoice', label: 'Invoice', count: 'invoice', roles: ACC },
-  { to: '/dispatch', label: 'Dispatch', count: 'dispatch', roles: OPS },
+  { to: '/inbox', label: 'To confirm', count: 'confirm' },
+  { to: '/plan', label: 'Plan', count: 'plan' },
+  { to: '/invoice', label: 'Invoice', count: 'invoice' },
+  { to: '/dispatch', label: 'Dispatch', count: 'dispatch' },
   { to: '/orders', label: 'Orders', end: true },
-  { to: '/invoices', label: 'All invoices', roles: ACC },
-  { to: '/downloads', label: 'Downloads', roles: [...OPS, 'accounts'] },
+  { to: '/invoices', label: 'All invoices' },
+  { to: '/downloads', label: 'Downloads' },
   { to: '/products', label: 'Products' },
   { to: '/customers', label: 'Customers' },
   { to: '/checks', label: 'Checks' },
@@ -44,7 +43,7 @@ export default function Layout() {
           </button>
         </div>
         <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-2">
-          {LINKS.filter((l) => !l.roles || l.roles.includes(me?.role ?? '')).map((l) => (
+          {LINKS.filter((l) => mayOpen(l.to, me?.role)).map((l) => (
             <NavLink
               key={l.to}
               to={l.to}

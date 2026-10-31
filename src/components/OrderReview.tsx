@@ -107,6 +107,10 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
           </Field>
           <Field label="Party’s PO number" hint={po ? 'If they sent one. Otherwise the Hub makes one (AE-PO-…).' : 'Leave empty: the Hub makes one (AE-PO-…).'}><Input {...inp('po_number')} /></Field>
           <Field label="PO date" hint="Empty = the order date"><Input type="date" {...inp('po_date')} /></Field>
+          <Field label="PO expiry" hint="Deliver before this"><Input type="date" {...inp('po_expiry')} /></Field>
+          <label className="flex min-h-12 items-center gap-2 self-end text-sm font-semibold text-stone-700">
+            <input type="checkbox" className="h-5 w-5" checked={d.po_revised} onChange={(e) => setDraft({ ...d, po_revised: e.target.checked })} /> Revised PO
+          </label>
           <Field label="Needed by"><Input type="date" {...inp('needed_by')} /></Field>
         </div>
       </Card>

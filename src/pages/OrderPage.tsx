@@ -20,7 +20,7 @@ interface Order {
   gst_status: string | null; gstin: string | null; fssai: string | null; billing_address: string | null; billing_city: string | null
   billing_state: string | null; billing_pin: string | null; payment_terms: string | null; margin_pct: number | null; same_as_billing: boolean
   delivery_name: string | null; delivery_address: string | null; delivery_city: string | null; delivery_state: string | null; delivery_pin: string | null
-  delivery_gstin: string | null; delivery_contact: string | null; delivery_phone: string | null; po_number: string | null; po_date: string | null
+  delivery_gstin: string | null; delivery_contact: string | null; delivery_phone: string | null; po_number: string | null; po_date: string | null; po_expiry: string | null; po_revised: boolean
   needed_by: string | null; payment_type: string | null; courier_pref: string | null; notes: string | null; source: string; source_text: string | null
   estimate_value: number; missing: string[]; invoice_no: string | null; invoice_date: string | null; invoice_value: number | null
   po_generated: boolean; shipping_charge: number; dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
@@ -214,9 +214,9 @@ export default function OrderPage() {
           <dl className="grid gap-2 text-sm">
             {field('Deliver to', deliverTo.filter(Boolean).join(', '))}
             {(o.delivery_contact || o.delivery_phone) && field('Delivery contact', [o.delivery_contact, o.delivery_phone].filter(Boolean).join(' · '))}
-            {field('PO', o.po_number ? `${o.po_number}${o.po_date ? ` (${o.po_date})` : ''}${o.po_generated ? ' · made by the Hub (no PO from the party)' : ''}` : null)}
+            {field('PO', o.po_number ? `${o.po_number}${o.po_revised ? ' · REVISED' : ''}${o.po_generated ? ' · made by the Hub (no PO from the party)' : ''}` : null)}
+            {(o.po_date || o.po_expiry) && field('PO dates', [o.po_date && `dated ${o.po_date}`, o.needed_by && `deliver by ${o.needed_by}`, o.po_expiry && `expires ${o.po_expiry}`].filter(Boolean).join(' · '))}
             {field('Payment type', o.payment_type)}
-            {o.needed_by && field('Needed by', o.needed_by)}
             {o.courier_pref && field('Preferred courier', o.courier_pref)}
             {o.notes && field('Notes', o.notes)}
           </dl>

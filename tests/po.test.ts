@@ -1,6 +1,6 @@
 // Made-up POs in the same layouts as the real ones (no real customer data in the repo).
 import { describe, expect, it } from 'vitest'
-import { blinkitSheet, poDate, readPo } from '../src/lib/po'
+import { blinkitPdfItems, blinkitSheet, poDate, readPo } from '../src/lib/po'
 
 const FOODSTORIES = `FOODSTORIES PRIVATE LIMITED
 PURCHASE ORDER
@@ -85,5 +85,38 @@ describe('PO readers', () => {
 
   it('returns null for POs it does not know', () => {
     expect(readPo([{ name: 'x.pdf', text: 'PURCHASE ORDER\nSome shop\n1 Chips 10' }])).toBeNull()
+  })
+
+  it('Blinkit PDF alone: wrapped rows, split barcode, expiry, PO type', () => {
+    const pdf = `Purchase Order
+Zomato Hyperpure Private Limited
+ZHPL - GS Test Store GS1
+Vendor  : ATOM FOODS LLP - MUMBAI  P.O. Number  : 52900000000001
+PAN  : XXXXX0000X  Date  : Oct. 21, 2026, 4:20 p.m.
+Registered  : Test Road  PO Type  : PO
+PO expiry date  : Nov. 10, 2026, 11:59 p.m.
+PO delivery date  : Oct. 23, 2026, 11:59 p.m.
+Delivered  : Zomato Hyperpure Private Limited  GST No.  : 36AAAAA2222A1ZZ
+To  1-2/3, Test Layout, Hyderabad-500001
+#  Item  HSN  Produc  Product  Basic
+1  102867  2106  745314  Atom Eats  83.33  5.00  0.00  0  4.17  87.50  5  125.00  30.0  437.50
+60  9099  460712  Truffle  .
+Potato  0
+Chips(Pouc  0
+h) (40 g)
+2  102867  2008  745314  Atom Eats  166.67  5.00  0.00  0  8.33  175.0  5  250.00  30.0  875.00
+67  1100  460781  Truffle  .  0
+Peanut  0
+Namkeen(J  0
+ar) (120 g)
+Total Amount  1312.50`
+    expect(blinkitPdfItems(pdf).map((i) => [i.text, i.qty, i.ean, i.code, i.rate])).toEqual([
+      ['Atom Eats Truffle Potato Chips 40 g', 5, '745314460712', '10286760', 87.5],
+      ['Atom Eats Truffle Peanut Namkeen 120 g', 5, '745314460781', '10286767', 175],
+    ])
+    const r = readPo([{ name: '52900000000001_20261021.pdf', text: pdf }])!
+    expect(r).toMatchObject({ format: 'blinkit', po_number: '52900000000001', po_date: '2026-10-21', delivery_date: '2026-10-23', expiry_date: '2026-11-10', revised: false, gstin: '36AAAAA2222A1ZZ' })
+    expect(readPo([{ name: 'x.pdf', text: pdf.replace('PO Type  : PO', 'PO Type  : Amendment') }])!.revised).toBe(true)
+    expect(readPo([{ name: 'Revised PO 5290.pdf', text: pdf }])!.revised).toBe(true)
   })
 })

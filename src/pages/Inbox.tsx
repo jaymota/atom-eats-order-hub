@@ -29,6 +29,7 @@ export default function Inbox() {
   const [orders, setOrders] = useState<OrderRef[]>([])
   const [senders, setSenders] = useState<Sender[]>([])
   const [sales, setSales] = useState<SalesOrder[]>([])
+  const [checked, setChecked] = useState<string | null>(null)
   const [tab, setTab] = useState<string>('')
   const [pick, setPick] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState('')
@@ -36,13 +37,15 @@ export default function Inbox() {
   const [add, setAdd] = useState({ match: '', source: '' })
 
   const load = useCallback(async () => {
-    const [m, o, s, so] = await Promise.all([
+    const [m, o, s, so, st] = await Promise.all([
       supabase.from('inbox_emails').select('id, from_addr, from_name, subject, received_at, body_text, source, kind, status, order_id, note, inbox_files(id, path, name)')
         .order('received_at', { ascending: false }).limit(300),
       supabase.from('orders').select('id, order_no, po_number, customer_name, stage').not('po_number', 'is', null).order('created_at', { ascending: false }).limit(1000),
       supabase.from('inbox_senders').select('*').order('source'),
       supabase.from('orders').select('id, order_no, customer_name, received_at, salesperson:people!orders_salesperson_id_fkey(name), order_lines(product_name, qty)').eq('stage', 'sales_order').order('received_at'),
+      supabase.from('inbox_status').select('last_check_at').maybeSingle(),
     ])
+    setChecked(st.data?.last_check_at ?? null)
     setSales((so.data ?? []) as unknown as SalesOrder[])
     // Open on the first tab that has something waiting.
     setTab((t) => t || ((so.data ?? []).length ? 'sales' : 'po'))
@@ -83,7 +86,13 @@ export default function Inbox() {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-xl font-bold text-ae-blue">To confirm</h2>
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-xl font-bold text-ae-blue">To confirm</h2>
+        {/* The Gmail script checks sales@ every 15 minutes; red when it hasn't for 30+ minutes. */}
+        <span className={`text-xs ${!checked || Date.now() - Date.parse(checked) > 30 * 60_000 ? 'font-semibold text-red-700' : 'text-stone-500'}`}>
+          {checked ? `Mail checked ${ago(checked)}` : 'Mail not checked yet'}
+        </span>
+      </div>
       <div className="flex rounded-xl border border-ae-blue/20 bg-white p-1">
         {TABS.map(([k, label]) => (
           <button key={k} type="button" onClick={() => setTab(k)} className={`min-h-11 flex-1 rounded-lg px-2 text-sm font-semibold ${tab === k ? 'bg-ae-blue text-ae-cream' : 'text-stone-600'}`}>

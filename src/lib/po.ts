@@ -21,6 +21,7 @@ export interface PoRead {
   po_number: string
   po_date: string        // yyyy-mm-dd
   delivery_date: string  // yyyy-mm-dd
+  expiry_date: string    // yyyy-mm-dd: the PO can't be delivered after this (Blinkit, Food Square)
   payment_terms: string
   revised: boolean
   buyer: string          // store / buyer name to look the customer up with
@@ -78,7 +79,40 @@ export function blinkitSheet(rows: unknown[][]): PoLine[] {
   })
 }
 
-/** Blinkit's PDF: we only take the header (store, dates, delivery address). Its item table is jumbled. */
+/** Blinkit's PDF item table. Every column wraps, so one item spans several lines:
+ *    "1  102867  2106  745314  Atom Eats  83.33  5.00  0.00  0  4.17  87.50  5  125.00  30.0  437.50"
+ *    "60  9099  460712  Truffle  ."          ← rest of item code, HSN, barcode; more of the name
+ *    "Potato  0" / "Chips(Pouc  0" / "h) (40 g)"
+ *  The barcode is the two halves joined; the rate is the line total ÷ quantity (the rate column can be cut). */
+export function blinkitPdfItems(text: string): PoLine[] {
+  const lines = text.split('\n').map((l) => l.trim())
+  const row = /^(\d{1,3})\s+(\d{3,8})\s+(\d{2,4})\s+(\d{4,7})\s+(.*?)\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)$/
+  const cont = /^(\d{1,6})\s+(\d{2,6})\s+(\d{4,7})\s*(.*)$/
+  const tidyBit = (t: string) => t.replace(/(\s+[.0]+)+$/, '').replace(/^[.0\s]+$/, '').trim()
+  const items: PoLine[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const m = row.exec(lines[i])
+    if (!m) continue
+    const c = cont.exec(lines[i + 1] ?? '')
+    const name = [tidyBit(m[5])]
+    let j = i + 1
+    if (c) { name.push(tidyBit(c[4])); j = i + 2 }
+    for (; j < Math.min(lines.length, i + 9); j++) {
+      if (!lines[j] || row.test(lines[j]) || /^Total\b/i.test(lines[j])) break
+      name.push(tidyBit(lines[j]))
+    }
+    const qty = Math.round(num(m[12]))
+    const total = num(m[15])
+    items.push({
+      text: name.filter(Boolean).join(' ').replace(/\([a-z\s]+\)/gi, ' ').replace(/\((\d+(?:\.\d+)?\s*k?g)\)/i, '$1').replace(/\s+/g, ' ').trim(),
+      qty, line: i, ean: c ? m[4] + c[3] : undefined, code: c ? m[2] + c[1] : m[2],
+      basic: num(m[6]) || undefined, rate: qty && total ? round2(total / qty) : num(m[11]) || undefined, mrp: num(m[13]) || undefined,
+    })
+  }
+  return items
+}
+
+/** Blinkit's PDF header: store, PO date, delivery date, expiry date, delivery address. */
 export function blinkitHeader(text: string): Omit<PoRead, 'items' | 'format'> | null {
   if (!/Zomato Hyperpure|ZHPL/i.test(text) || !/P\.O\. Number/i.test(text)) return null
   const lines = text.split('\n').map((l) => l.trim())
@@ -96,8 +130,11 @@ export function blinkitHeader(text: string): Omit<PoRead, 'items' | 'format'> | 
   const gstin = grab(lines[at] ?? '', /GST No\.\s*:\s*(\w{15})/) || theirGstin(text)
   return {
     po_number: grab(text, /P\.O\. Number\s*:\s*(\d+)/), po_date: poDate(grab(text, /\bDate\s*:\s*([A-Za-z]{3}\.? \d{1,2}, \d{4})/)),
-    delivery_date: poDate(grab(text, /PO delivery date\s*:\s*([A-Za-z]{3}\.? \d{1,2}, \d{4})/i)), payment_terms: grab(text, /Payment Terms\s*:\s*([^\n]+?)(?:\s{2}|$)/m),
-    revised: false, buyer: store || 'Zomato Hyperpure', gstin,
+    delivery_date: poDate(grab(text, /PO delivery date\s*:\s*([A-Za-z]{3}\.? \d{1,2}, \d{4})/i)),
+    expiry_date: poDate(grab(text, /PO expiry date\s*:\s*([A-Za-z]{3}\.? \d{1,2}, \d{4})/i)),
+    payment_terms: grab(text, /Payment Terms\s*:\s*([^\n]+?)(?:\s{2}|$)/m),
+    // "PO Type : PO" on a normal PO; anything else (amendment, revision) counts as revised.
+    revised: !!grab(text, /PO Type\s*:\s*(\S+)/i) && !/^PO$/i.test(grab(text, /PO Type\s*:\s*(\S+)/i)), buyer: store || 'Zomato Hyperpure', gstin,
     ship: addr.length ? shipFrom([addr.join(' ')], gstin, store || 'Zomato Hyperpure') : null,
   }
 }
@@ -134,7 +171,7 @@ export function foodstories(text: string): PoRead | null {
   }
   return {
     format: 'foodstories', po_number: grab(text, /P\.\s?O\. Number\s*:\s*(\d+)/), po_date: poDate(grab(text, /\bDate\s*:\s*([\d.]+)/)),
-    delivery_date: poDate(grab(text, /PO Delivery date\s*:\s*([\d.]+)/i)), payment_terms: grab(text, /Payment Terms\s*:\s*([^\n]+?)(?:\s{2}|$)/m),
+    delivery_date: poDate(grab(text, /PO Delivery date\s*:\s*([\d.]+)/i)), expiry_date: '', payment_terms: grab(text, /Payment Terms\s*:\s*([^\n]+?)(?:\s{2}|$)/m),
     revised: /revised/i.test(text.slice(0, 2000)), buyer: block[0] ?? 'Foodstories', gstin,
     ship: at >= 0 ? shipFrom(block, gstin) : null, items,
   }
@@ -191,7 +228,7 @@ export function foodsquare(text: string): PoRead | null {
   }
   return {
     format: 'foodsquare', po_number: grab(text, /PO No\s*:\s*(\d+)/), po_date: poDate(grab(text, /PO Date\s*:\s*([\d/]+)/)),
-    delivery_date: poDate(grab(text, /Delivery Date\s*:\s*([\d/]+)/)), payment_terms: '', revised: /revised/i.test(text.slice(0, 1500)),
+    delivery_date: poDate(grab(text, /Delivery Date\s*:\s*([\d/]+)/)), expiry_date: poDate(grab(text, /PO Expiry Date\s*:\s*([\d/]+)/i)), payment_terms: '', revised: /revised/i.test(text.slice(0, 1500)),
     buyer, gstin, ship, items,
   }
 }
@@ -213,7 +250,7 @@ export function istore(text: string): PoRead | null {
     items.push({ text: name, qty: Math.round(num(m[4])), line: i, basic, rate: round2(basic * (1 + num(m[6]) / 100)) })
   }
   return {
-    format: 'istore', po_number: grab(text, /PO NO\s*:\s*(\S+)/), po_date: poDate(grab(text, /\bDate\s*:\s*([\d-]+)/)), delivery_date: '',
+    format: 'istore', po_number: grab(text, /PO NO\s*:\s*(\S+)/), po_date: poDate(grab(text, /\bDate\s*:\s*([\d-]+)/)), delivery_date: '', expiry_date: '',
     payment_terms: grab(text, /Payment Term\s*:\s*([^\n]+?)(?:\s{2}|$)/m), revised: false, buyer: 'Istore Direct Trading Private Limited',
     gstin: theirGstin(text), ship: null, items,
   }
@@ -225,7 +262,8 @@ export interface PoFile { name: string; text?: string; rows?: unknown[][] }
 
 /** Reads a PO from its files (e.g. Blinkit's Excel + PDF). Returns null when no fixed reader knows it. */
 export function readPo(files: PoFile[], subject = ''): PoRead | null {
-  const revised = /revised/i.test(subject)
+  // PDFs never say "revised": only the email subject or the file name do (or the PO number already being in the Hub).
+  const revised = /revis|amend/i.test(subject) || files.some((f) => /revis|amend/i.test(f.name))
   for (const f of files) {
     if (!f.text) continue
     const r = foodstories(f.text) ?? foodsquare(f.text) ?? istore(f.text)
@@ -235,11 +273,17 @@ export function readPo(files: PoFile[], subject = ''): PoRead | null {
   const head = files.map((f) => (f.text ? blinkitHeader(f.text) : null)).find(Boolean)
   if (sheet) {
     return {
-      po_number: /(\d{12,16})_/.exec(sheet.name)?.[1] ?? /PO_\w*?(\d{12,16})/.exec(subject)?.[1] ?? '', po_date: '', delivery_date: '', payment_terms: '',
-      buyer: 'Zomato Hyperpure', gstin: '', ship: null, ...(head ?? {}), revised, format: 'blinkit', items: blinkitSheet(sheet.rows!),
+      po_number: /(\d{12,16})_/.exec(sheet.name)?.[1] ?? /PO_\w*?(\d{12,16})/.exec(subject)?.[1] ?? '', po_date: '', delivery_date: '', expiry_date: '', payment_terms: '',
+      buyer: 'Zomato Hyperpure', gstin: '', ship: null, ...(head ?? {}), revised: revised || !!head?.revised, format: 'blinkit', items: blinkitSheet(sheet.rows!),
       // The Excel's file name carries the PO number of these items.
       ...(/(\d{12,16})_/.test(sheet.name) ? { po_number: /(\d{12,16})_/.exec(sheet.name)![1] } : {}),
     }
+  }
+  // Blinkit's PDF on its own (uploaded by hand without the Excel).
+  const pdf = files.find((f) => f.text && blinkitHeader(f.text))
+  if (pdf && head) {
+    const items = blinkitPdfItems(pdf.text!)
+    if (items.length) return { ...head, revised: head.revised || revised, format: 'blinkit', items }
   }
   return null
 }

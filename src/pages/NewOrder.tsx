@@ -464,7 +464,7 @@ export default function NewOrder() {
     }
     if (po) {
       d = {
-        ...d, inbox_id: inboxId ?? null, channel: CHANNEL_FOR[po.format] ?? '', po_number: po.po_number, po_date: po.po_date, needed_by: po.delivery_date,
+        ...d, inbox_id: inboxId ?? null, channel: CHANNEL_FOR[po.format] ?? '', po_number: po.po_number, po_date: po.po_date, po_expiry: po.expiry_date, po_revised: po.revised, needed_by: po.delivery_date,
         gstin: po.gstin, gst_status: po.gstin ? 'registered' : '', billing_state: stateFromGstin(po.gstin), phone: '', email: '',
       }
       if (po.ship) {
@@ -481,9 +481,11 @@ export default function NewOrder() {
     let note = ''
     if (d.po_number && !d.id) {
       const { data: prev } = await supabase.from('orders').select('id, order_no, stage').eq('po_number', d.po_number).neq('stage', 'cancelled').limit(1).maybeSingle()
+      if (prev) d.po_revised = true // same PO number again = a revision
       if (prev && ['new', 'on_hold'].includes(prev.stage)) { d.id = prev.id; note = `Revised PO: this updates ${prev.order_no}.` }
-      else if (prev) note = `PO ${d.po_number} is already ${prev.order_no} (${prev.stage}). Tell accounts before saving a new one.`
+      else if (prev) note = `Revised PO: ${d.po_number} is already ${prev.order_no} (${prev.stage}). Tell accounts before saving a new one.`
     }
+    if (d.po_revised && !note) note = 'Revised PO.'
 
     const qs: Q[] = []
     if (!guess.sure) qs.push({ kind: 'customer' })

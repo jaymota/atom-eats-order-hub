@@ -11,11 +11,11 @@ import Orders, { itemsShort } from './Orders'
 interface Row {
   id: string; order_no: string; received_at: string; stage: Stage; channel: string; customer_name: string
   gstin: string | null; delivery_city: string | null; billing_city: string | null; estimate_value: number; missing: string[]
-  po_number: string | null; courier_pref: string | null; planned_by: string | null; invoice_no: string | null; invoice_value: number | null
+  po_number: string | null; po_expiry: string | null; po_revised: boolean; courier_pref: string | null; planned_by: string | null; invoice_no: string | null; invoice_value: number | null
   shipping_charge: number; courier: string | null; tracking_no: string | null; boxes: number | null; dispatch_note: string | null; dispatch_date: string | null
   order_lines: { product_name: string | null; qty: number; tally_name: string | null; rate: number | null; sku: string }[]
 }
-const COLS = 'id, order_no, received_at, stage, channel, customer_name, gstin, delivery_city, billing_city, estimate_value, missing, po_number, courier_pref, planned_by, invoice_no, invoice_value, shipping_charge, courier, tracking_no, boxes, dispatch_note, dispatch_date, order_lines(product_name, qty, tally_name, rate, sku, line_no)'
+const COLS = 'id, order_no, received_at, stage, channel, customer_name, gstin, delivery_city, billing_city, estimate_value, missing, po_number, po_expiry, po_revised, courier_pref, planned_by, invoice_no, invoice_value, shipping_charge, courier, tracking_no, boxes, dispatch_note, dispatch_date, order_lines(product_name, qty, tally_name, rate, sku, line_no)'
 
 function useStageRows(stage: Stage | 'no_tracking') {
   const [rows, setRows] = useState<Row[] | null>(null)
@@ -42,6 +42,12 @@ function Head({ o }: { o: Row }) {
       <div className="text-xs text-stone-500">
         {o.order_no} · {o.channel} · {o.delivery_city ?? o.billing_city ?? ''} · <span className={late ? 'font-semibold text-red-700' : ''}>{late ? 'LATE ' : ''}{age(o.received_at)}</span>
       </div>
+      {(o.po_revised || o.po_expiry) && (
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {o.po_revised && <Badge tone="amber">Revised PO</Badge>}
+          {o.po_expiry && <Badge tone={o.po_expiry <= todayIST() ? 'red' : 'stone'}>PO expires {new Date(o.po_expiry).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Badge>}
+        </div>
+      )}
     </div>
   )
 }

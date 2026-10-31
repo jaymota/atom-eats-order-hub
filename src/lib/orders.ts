@@ -60,6 +60,8 @@ export interface Draft {
   delivery_phone: string
   po_number: string
   po_date: string
+  po_expiry: string   // Blinkit / Food Square: can't deliver after this
+  po_revised: boolean // a revised version of an earlier PO
   needed_by: string
   payment_type: string
   shipping_charge: number | null
@@ -85,7 +87,7 @@ export function emptyDraft(salespersonId: string | null): Draft {
     billing_address: '', billing_city: '', billing_state: '', billing_pin: '', payment_terms: 'credit', margin_pct: null,
     same_as_billing: false, address_id: null, delivery_name: '', delivery_address: '', delivery_city: '', delivery_state: '',
     delivery_pin: '', delivery_gstin: '', delivery_contact: '', delivery_phone: '',
-    po_number: '', po_date: '', needed_by: '', payment_type: 'Credit', courier_pref: 'DTDC', shipping_charge: null, notes: '',
+    po_number: '', po_date: '', po_expiry: '', po_revised: false, needed_by: '', payment_type: 'Credit', courier_pref: 'DTDC', shipping_charge: null, notes: '',
     lines: [], source: 'blank', source_text: '', files: [], learn_customer_alias: null,
   }
 }
@@ -312,7 +314,7 @@ export async function loadDraft(id: string): Promise<Draft> {
     billing_state: s(o.billing_state), billing_pin: s(o.billing_pin), payment_terms: s(o.payment_terms), margin_pct: o.margin_pct,
     same_as_billing: o.same_as_billing, address_id: o.address_id, delivery_name: s(o.delivery_name), delivery_address: s(o.delivery_address),
     delivery_city: s(o.delivery_city), delivery_state: s(o.delivery_state), delivery_pin: s(o.delivery_pin), delivery_gstin: s(o.delivery_gstin),
-    delivery_contact: s(o.delivery_contact), delivery_phone: s(o.delivery_phone), po_number: s(o.po_number), po_date: s(o.po_date),
+    delivery_contact: s(o.delivery_contact), delivery_phone: s(o.delivery_phone), po_number: s(o.po_number), po_date: s(o.po_date), po_expiry: s(o.po_expiry), po_revised: !!o.po_revised,
     needed_by: s(o.needed_by), payment_type: s(o.payment_type), courier_pref: s(o.courier_pref), shipping_charge: o.shipping_charge ? Number(o.shipping_charge) : null, notes: s(o.notes),
     source: o.source, source_text: s(o.source_text),
     lines: (lines ?? []).map((l) => ({ key: newKey(), sku: l.sku, qty: l.qty, typed_as: l.typed_as, price_basis: l.price_basis, margin_pct: l.margin_pct, rate: l.rate, learn: false })),

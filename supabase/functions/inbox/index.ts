@@ -3,6 +3,7 @@
 // PO / revised PO / GRN / other, and its attachments are put in the private file store.
 //
 // Body: { id, threadId, from, fromName, subject, date, body, attachments: [{ name, mime, data (base64) }] }
+//   or: { ping: true, found } after each run, so the Hub can show when the mailbox was last checked.
 import { adminDb, json } from '../_shared/server.ts'
 
 const OK_FILE = /\.(pdf|xlsx?|csv|png|jpe?g|webp)$/i
@@ -23,6 +24,11 @@ Deno.serve(async (req) => {
 
   let m: Record<string, unknown>
   try { m = await req.json() } catch { return json(req, { error: 'Bad email' }, 400) }
+  // The script says "I checked" at the end of every run, even when nothing new came in.
+  if (m.ping) {
+    await adminDb().from('inbox_status').update({ last_check_at: new Date().toISOString(), last_found: Number(m.found) || 0 }).eq('id', 1)
+    return json(req, { ok: true })
+  }
   const gmailId = String(m.id ?? '')
   const from = String(m.from ?? '').toLowerCase().trim()
   if (!gmailId || !from) return json(req, { error: 'Bad email' }, 400)

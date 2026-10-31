@@ -14,6 +14,7 @@ const LOOKS_LIKE_PO = /(^|[^a-z])(p\.?\s?o\.?|purchase\s*order|grn|indent)([^a-z
 const FILE_OK = /\.(pdf|xlsx?|csv|png|jpe?g|webp)$/i
 
 function sendNewEmails() {
+  let found = 0
   const props = PropertiesService.getScriptProperties()
   const sent = JSON.parse(props.getProperty('sent') || '[]')
   const threads = GmailApp.search('has:attachment newer_than:2d -in:spam -in:trash -in:chats', 0, 50)
@@ -40,11 +41,13 @@ function sendNewEmails() {
           attachments: files.map((a) => ({ name: a.getName(), mime: a.getContentType(), data: Utilities.base64Encode(a.getBytes()) })),
         }),
       })
-      if (res.getResponseCode() === 200) { sent.push(id); console.log('Sent to the Hub: ' + m.getSubject()) }
+      if (res.getResponseCode() === 200) { sent.push(id); found++; console.log('Sent to the Hub: ' + m.getSubject()) }
       else console.log('Hub said ' + res.getResponseCode() + ' for "' + m.getSubject() + '": ' + res.getContentText())
     }
   }
   props.setProperty('sent', JSON.stringify(sent.slice(-500)))
+  // Tell the Hub this check ran (shown on "To confirm"), even when there was nothing new.
+  UrlFetchApp.fetch(HUB_URL, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { 'x-hub-key': HUB_KEY }, payload: JSON.stringify({ ping: true, found }) })
 }
 
 // Run this once: it checks every 15 minutes from then on.

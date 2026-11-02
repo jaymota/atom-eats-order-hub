@@ -92,6 +92,12 @@ export function emptyDraft(salespersonId: string | null): Draft {
   }
 }
 
+/** FOC (free samples): one switch fills FOC everywhere it matters — channel, payment, terms, every price ₹0. */
+export const applyFoc = (d: Draft): Draft => ({
+  ...d, channel: 'FOC', payment_type: 'FOC', payment_terms: 'FOC', margin_pct: null,
+  lines: d.lines.map((l) => ({ ...l, price_basis: 'foc', rate: 0, margin_pct: null })),
+})
+
 /** Price for one line: MRP minus margin, a PO / agreed rate, or free. */
 export function lineRate(l: DraftLine, mrp: number | null): number | null {
   if (l.price_basis === 'foc') return 0
@@ -117,17 +123,20 @@ export function mustHave(d: Draft): string[] {
 /** ✱✱ details: needed before the order can be planned for dispatch (same rules as the database). */
 export function stillMissing(d: Draft): string[] {
   const m: string[] = []
-  if (!d.gst_status) m.push('GST status')
-  if (d.gst_status === 'registered' && !d.gstin.trim()) m.push('GSTIN')
-  if (!d.billing_address.trim()) m.push('billing address')
-  if (!d.billing_state.trim()) m.push('billing state')
-  if (!d.billing_pin.trim()) m.push('billing PIN')
-  if (!d.payment_terms) m.push('payment terms')
+  const foc = d.channel === 'FOC' // free samples: no invoice, so no GST, billing or payment details
+  if (!foc) {
+    if (!d.gst_status) m.push('GST status')
+    if (d.gst_status === 'registered' && !d.gstin.trim()) m.push('GSTIN')
+    if (!d.billing_address.trim()) m.push('billing address')
+    if (!d.billing_state.trim()) m.push('billing state')
+    if (!d.billing_pin.trim()) m.push('billing PIN')
+    if (!d.payment_terms) m.push('payment terms')
+  }
   const del = d.same_as_billing ? { a: d.billing_address, s: d.billing_state, p: d.billing_pin } : { a: d.delivery_address, s: d.delivery_state, p: d.delivery_pin }
   if (!del.a.trim()) m.push('delivery address')
   if (!del.s.trim()) m.push('delivery state')
   if (!del.p.trim()) m.push('delivery PIN')
-  if (!d.payment_type) m.push('payment type')
+  if (!d.payment_type && !foc) m.push('payment type')
   if (d.lines.some((l) => !l.price_basis || (l.price_basis === 'mrp_minus_margin' ? l.margin_pct == null : l.price_basis !== 'foc' && l.rate == null))) m.push('price for every product')
   return m
 }

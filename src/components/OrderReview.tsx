@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { isBulk, productLabel, useCatalog } from '../lib/catalog'
 import { GST_STATES, gstinState } from '../lib/match'
 import {
-  BASIS_LABEL, applyCustomer, COURIERS, PAYMENT_TYPES, PO_CHANNELS, draftTotal, findRepeat, lineRate, mustHave, newKey, saveDraft, stateFromGstin, stillMissing,
+  BASIS_LABEL, applyCustomer, applyFoc, COURIERS, PAYMENT_TYPES, PO_CHANNELS, draftTotal, findRepeat, lineRate, mustHave, newKey, saveDraft, stateFromGstin, stillMissing,
   type Draft, type DraftLine, type PriceBasis,
 } from '../lib/orders'
 import { rupees } from '../lib/stages'
@@ -94,7 +94,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
         {sectionTitle('Order')}
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Channel ✱">
-            <Select {...inp('channel')}>
+            <Select value={d.channel} onChange={(e) => setDraft(e.target.value === 'FOC' ? applyFoc(d) : { ...d, channel: e.target.value })}>
               <option value="">Choose…</option>
               {CHANNELS.map((c) => <option key={c} value={c}>{c} ({CHANNEL_HINT[c]})</option>)}
             </Select>

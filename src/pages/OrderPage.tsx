@@ -161,11 +161,11 @@ export default function OrderPage() {
       <ErrorBox>{error}</ErrorBox>
       <NextStep key={o.stage} o={o} lines={lines} role={me?.role} onDone={(m) => { setSavedMsg(m); setError(''); load() }} onError={setError} />
 
-      {o.invoice_no && (
+      {(o.invoice_no || o.dispatch_date || (o.channel === 'FOC' && o.stage === 'invoiced')) && (
         <Card>
-          <h3 className="mb-2 font-semibold text-ae-blue">Invoice and dispatch</h3>
+          <h3 className="mb-2 font-semibold text-ae-blue">{o.invoice_no ? 'Invoice and dispatch' : 'Dispatch'}</h3>
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
-            {field('Invoice', `${o.invoice_no} · ${o.invoice_date ?? ''} · ${rupees(o.invoice_value)}`)}
+            {field('Invoice', o.invoice_no ? `${o.invoice_no} · ${o.invoice_date ?? ''} · ${rupees(o.invoice_value)}` : o.channel === 'FOC' ? 'FOC · no invoice needed' : null)}
             {o.dispatch_date && field('Dispatched', [o.dispatch_date, o.courier, o.tracking_no ?? (o.courier === 'Customer pickup' ? null : 'tracking to follow'), o.boxes ? `${o.boxes} box${o.boxes === 1 ? '' : 'es'}` : null].filter(Boolean).join(' · '))}
             {o.dispatch_note && field('Dispatch note', o.dispatch_note)}
             {o.delivered_at && field('Delivered', istDateTime(o.delivered_at))}
@@ -332,7 +332,7 @@ function NextStep({ o, lines, role, onDone, onError }: { o: Order; lines: Line[]
       </div>
     )
   }
-  const mayUndo = (o.stage === 'planned' && can.plan(role)) || (o.stage === 'invoiced' && can.invoice(role)) || (o.stage === 'dispatched' && (role === 'admin' || role === 'super_admin'))
+  const mayUndo = (o.stage === 'planned' && can.plan(role)) || (o.stage === 'invoiced' && (o.channel === 'FOC' && !o.invoice_no ? can.plan(role) : can.invoice(role))) || (o.stage === 'dispatched' && (role === 'admin' || role === 'super_admin'))
   if (!body && !mayUndo && !canSplit) return null
 
   return (

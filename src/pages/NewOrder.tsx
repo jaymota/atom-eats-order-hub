@@ -10,7 +10,7 @@ import { useAuth } from '../lib/auth'
 import { isBulk, loadCatalog, productLabel, searchProducts, useCatalog, type Catalog, type Product } from '../lib/catalog'
 import { nameSimilarity, norm, tidy } from '../lib/match'
 import {
-  MESSAGE_TEMPLATE, applyCustomer, emptyDraft, loadCustomersLite, newKey, splitAddress, stateFromGstin, type Draft, type DraftLine,
+  MESSAGE_TEMPLATE, applyCustomer, applyFoc, emptyDraft, loadCustomersLite, newKey, splitAddress, stateFromGstin, type Draft, type DraftLine,
 } from '../lib/orders'
 import { cleanOcr, readBarcodeRows, readMessage, type RawItem, type ReadMessage } from '../lib/parse'
 import { readImage, readPoFiles } from '../lib/readers'
@@ -55,7 +55,7 @@ type PoItem = RawItem & { ean?: string; rate?: number; basic?: number }
 
 type OnRead = (text: string, files: File[], source: string, sheetItems?: PoItem[], po?: PoRead | null) => void
 
-function InputStep({ onRead, onGt }: { onRead: OnRead; onGt: () => void }) {
+function InputStep({ onRead, onGt, foc, setFoc }: { onRead: OnRead; onGt: () => void; foc: boolean; setFoc: (v: boolean) => void }) {
   const [mode, setMode] = useState<'pick' | 'paste'>('pick')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState('')
@@ -118,6 +118,12 @@ function InputStep({ onRead, onGt }: { onRead: OnRead; onGt: () => void }) {
   return (
     <div className="space-y-3">
       <ErrorBox>{error}</ErrorBox>
+      {/* FOC once, here: channel, payment and prices become FOC on their own; no GST or invoice needed. */}
+      <button type="button" onClick={() => setFoc(!foc)}
+        className={`flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3 text-left font-bold ${foc ? 'border-ae-pink bg-ae-pink text-ae-blue' : 'border-stone-200 bg-white text-stone-600'}`}>
+        <span>🎁 FOC order <span className="block text-xs font-normal">Free samples · no invoice</span></span>
+        <span className={`h-7 w-12 rounded-full p-1 transition-colors ${foc ? 'bg-ae-blue' : 'bg-stone-300'}`}><span className={`block h-5 w-5 rounded-full bg-white transition-transform ${foc ? 'translate-x-5' : ''}`} /></span>
+      </button>
       <div className="grid grid-cols-2 gap-3">
         {([
           ['💬', 'WhatsApp', 'Paste the order message', () => setMode('paste')],
@@ -392,6 +398,7 @@ export default function NewOrder() {
   const [at, setAt] = useState(0)
   const [asked, setAsked] = useState(0)
   const [info, setInfo] = useState('')
+  const [foc, setFoc] = useState(false) // free samples: set once here, filled in everywhere
 
   // Opened from "To confirm": read that email's attachments straight away.
   const loc = useLocation() as { state?: { inboxId?: string } }
@@ -496,6 +503,7 @@ export default function NewOrder() {
     if (!guess.sure) qs.push({ kind: 'customer' })
     for (const it of items.filter((i) => !i.sure)) qs.push({ kind: 'product', item: it })
     qs.push({ kind: 'qty' }, { kind: 'address' }, { kind: 'channel' }, { kind: 'margin' }, { kind: 'po' })
+    if (foc) d = applyFoc(d)
     setAn(analysis)
     setDraft(d)
     setQueue(qs)
@@ -525,7 +533,7 @@ export default function NewOrder() {
     let i = at
     while (i < queue.length && !relevant(queue[i], draft)) i++
     if (i >= queue.length) {
-      setDraft((d) => ({ ...d, lines: d.lines.map((l) => (l.price_basis ? l : { ...l, price_basis: d.channel !== 'FOC' && bulkLine(l.sku) ? 'agreed_rate' : basis(d), margin_pct: d.margin_pct })) }))
+      setDraft((d) => d.channel === 'FOC' ? applyFoc(d) : ({ ...d, lines: d.lines.map((l) => (l.price_basis ? l : { ...l, price_basis: d.channel !== 'FOC' && bulkLine(l.sku) ? 'agreed_rate' : basis(d), margin_pct: d.margin_pct })) }))
       setStep('review')
     } else if (i !== at) setAt(i)
   }, [step, at, queue, draft]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -541,8 +549,8 @@ export default function NewOrder() {
   if (step === 'gt') {
     return (
       <div className="mx-auto max-w-xl space-y-3">
-        <h2 className="text-xl font-bold text-ae-blue">GT order</h2>
-        <GtForm onBack={() => setStep('input')} />
+        <h2 className="text-xl font-bold text-ae-blue">{foc ? 'FOC order' : 'GT order'}</h2>
+        <GtForm onBack={() => setStep('input')} foc={foc} />
       </div>
     )
   }
@@ -551,7 +559,7 @@ export default function NewOrder() {
     return (
       <div className="mx-auto max-w-xl space-y-4">
         <h2 className="text-xl font-bold text-ae-blue">New order</h2>
-        <InputStep onRead={start} onGt={() => setStep('gt')} />
+        <InputStep onRead={start} onGt={() => setStep('gt')} foc={foc} setFoc={setFoc} />
       </div>
     )
   }

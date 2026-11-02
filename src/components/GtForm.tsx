@@ -10,7 +10,7 @@ import type { CustomerLite } from '../lib/resolve'
 import { supabase } from '../lib/supabase'
 import { todoChanged } from '../lib/todo'
 
-export default function GtForm({ onBack }: { onBack: () => void }) {
+export default function GtForm({ onBack, foc = false }: { onBack: () => void; foc?: boolean }) {
   const { me } = useAuth()
   const { catalog } = useCatalog()
   const [party, setParty] = useState<CustomerLite | null>(null)
@@ -40,10 +40,11 @@ export default function GtForm({ onBack }: { onBack: () => void }) {
     const { data: id, error: e } = await supabase.rpc('save_order', {
       p_id: null,
       p: {
-        sales_order: true, channel: 'General Trade', source: 'gt_form', salesperson_id: me?.id, customer_id: party?.id ?? '', customer_name: name,
+        sales_order: true, channel: foc ? 'FOC' : 'General Trade', source: 'gt_form', ...(foc ? { payment_type: 'FOC', payment_terms: 'FOC' } : {}), salesperson_id: me?.id, customer_id: party?.id ?? '', customer_name: name,
         phone: phone.trim() || party?.phone || '', notes,
         lines: picked.map(([sku, n]) => {
           const p = catalog!.bySku.get(sku)!
+          if (foc) return { sku, qty: n, price_basis: 'foc' }
           return margin != null && !isBulk(p) ? { sku, qty: n, price_basis: 'mrp_minus_margin', margin_pct: margin } : { sku, qty: n }
         }),
       },

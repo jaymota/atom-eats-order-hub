@@ -96,6 +96,10 @@ export function PlanPage() {
   const [busy, setBusy] = useState(false)
   const allowed = can.plan(me?.role)
   const ready = (rows ?? []).filter((r) => !r.missing.length)
+  // FOC orders skip the invoice and go straight to Dispatch.
+  const pickedRows = (rows ?? []).filter((r) => picked.has(r.id))
+  const allFoc = pickedRows.length > 0 && pickedRows.every((r) => r.channel === 'FOC')
+  const anyFoc = pickedRows.some((r) => r.channel === 'FOC')
 
   const send = async () => {
     setBusy(true); setError(''); setMsg('')
@@ -103,7 +107,7 @@ export function PlanPage() {
     const { data, error: e } = await supabase.rpc('plan_orders', { p_ids: ids })
     setBusy(false)
     if (e) { setError(e.message); return }
-    setMsg(`${data} sent to accounts.`)
+    setMsg(anyFoc ? `${data} planned (FOC ones went straight to Dispatch).` : `${data} sent to accounts.`)
     setPicked(new Set())
     notify('planned', ids)
     load()
@@ -111,7 +115,7 @@ export function PlanPage() {
 
   return (
     <Shell title="Plan" empty="Nothing to plan." rows={rows} msg={msg} error={error} tab={tab} setTab={setTab}
-      bar={allowed && <Button disabled={!picked.size || busy} onClick={send}>{busy ? 'Sending…' : `Send to accounts (${picked.size})`}</Button>}>
+      bar={allowed && <Button disabled={!picked.size || busy} onClick={send}>{busy ? 'Sending…' : `${allFoc ? 'Send to dispatch' : 'Send to accounts'} (${picked.size})`}</Button>}>
       {allowed && ready.length > 1 && (
         <button type="button" className="text-sm font-semibold text-ae-blue underline" onClick={() => setPicked(picked.size === ready.length ? new Set() : new Set(ready.map((r) => r.id)))}>
           {picked.size === ready.length ? 'Untick all' : `Tick all ready (${ready.length})`}
@@ -311,7 +315,7 @@ export function DispatchPage() {
               <li key={o.id}>
                 <Card className="space-y-2 p-3 sm:p-3">
                   <Head o={o} />
-                  <div className="text-xs text-stone-500">Sent {o.dispatch_date} · {o.courier} · Invoice {o.invoice_no}</div>
+                  <div className="text-xs text-stone-500">Sent {o.dispatch_date} · {o.courier} · {o.invoice_no ? `Invoice ${o.invoice_no}` : 'FOC · no invoice'}</div>
                   {allowed && track[o.id] && (
                     <>
                       <DispatchFields v={track[o.id]} set={(nv) => setTrack({ ...track, [o.id]: nv })} />
@@ -336,7 +340,7 @@ export function DispatchPage() {
                       {allowed && v && <Tick on={v.on} set={(on) => setVals({ ...vals, [o.id]: { ...v, on } })} />}
                       <div className="min-w-0 flex-1 space-y-1">
                         <Head o={o} />
-                        <div className="text-xs text-stone-500">Invoice {o.invoice_no}</div>
+                        <div className="text-xs text-stone-500">{o.invoice_no ? `Invoice ${o.invoice_no}` : o.channel === 'FOC' ? 'FOC · no invoice' : 'No invoice'}</div>
                         <button type="button" className="text-left text-sm text-stone-700" onClick={() => navigate(`/orders/${o.id}`)}>{itemsShort(o.order_lines)}</button>
                       </div>
                     </div>

@@ -46,7 +46,7 @@ export function problems(o: EeOrder, eeSkus: Set<string>): string[] {
   const p: string[] = []
   const bad = o.order_lines.filter((l) => !eeSkus.has(l.sku)).map((l) => l.sku)
   if (bad.length) p.push(`Not in Easy Ecom: ${bad.join(', ')}`)
-  if (!o.invoice_no) p.push('No invoice')
+  if (!o.invoice_no && o.channel !== 'FOC') p.push('No invoice') // FOC samples have no invoice
   if (!shipTo(o).pin) p.push('No PIN')
   if (!o.customer?.ee_customer_code) p.push('No Easy Ecom customer code')
   return p

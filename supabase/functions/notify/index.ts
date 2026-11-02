@@ -32,8 +32,9 @@ Deno.serve(async (req) => {
     .in('id', ids).eq('stage', k.stage).order('order_no')
   if (!orders?.length) return json(req, { ok: true, sent: 0 })
 
-  let q = db.from('people').select('email, role, copy_on_handoffs').eq('active', true)
-  q = k.to ? q.or(`role.eq.${k.to},copy_on_handoffs.eq.true`) : q.eq('copy_on_handoffs', true)
+  let q = db.from('people').select('email, role, username, copy_on_handoffs').eq('active', true)
+  // The shared logins keep their emails whatever their role (e.g. "accounts" is an admin now).
+  q = k.to ? q.or(`role.eq.${k.to},username.eq.${k.to === 'ops' ? 'operations' : k.to},copy_on_handoffs.eq.true`) : q.eq('copy_on_handoffs', true)
   const { data: people } = await q
   const to = (people ?? []).map((p) => p.email as string).filter(Boolean)
 

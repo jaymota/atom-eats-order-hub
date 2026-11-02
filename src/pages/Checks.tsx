@@ -14,13 +14,13 @@ type Tab = 'duplicates' | 'nicknames' | 'tally' | 'prices'
 interface Pair { id: number; reason: string; score: number; a: Customer; b: Customer }
 
 /** Small search box that picks an offline product. */
-export function ProductPicker({ onPick, placeholder = 'Search for the right product…' }: { onPick: (p: Product) => void; placeholder?: string }) {
+export function ProductPicker({ onPick, placeholder = 'Search for the right product…', autoFocus = true }: { onPick: (p: Product) => void; placeholder?: string; autoFocus?: boolean }) {
   const { catalog } = useCatalog()
   const [q, setQ] = useState('')
   const hits = useMemo(() => (catalog && q ? searchProducts(catalog, q, { offlineOnly: false, limit: 8 }) : []), [catalog, q])
   return (
     <div className="space-y-1">
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} autoFocus />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} autoFocus={autoFocus} />
       {hits.length > 0 && (
         <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white">
           {hits.map((p) => (

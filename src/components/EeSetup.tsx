@@ -132,7 +132,7 @@ export default function EeSetup({ orders, eeSkus, day, save, onChange }: {
                           {!p.ee_product_done && <button type="button" className="text-xs text-stone-500 underline" onClick={() => setE(p.sku, { parts: e.parts.filter((_, j) => j !== i) })}>Remove</button>}
                         </div>
                       ))}
-                      {!p.ee_product_done && <ProductPicker placeholder="Add a product inside…" onPick={(x) => x.sku !== p.sku && !e.parts.some((y) => y.sku === x.sku) && setE(p.sku, { parts: [...e.parts, { sku: x.sku, qty: 1 }] })} />}
+                      {!p.ee_product_done && <ProductPicker placeholder="Add a product inside…" autoFocus={false} onPick={(x) => x.sku !== p.sku && !e.parts.some((y) => y.sku === x.sku) && setE(p.sku, { parts: [...e.parts, { sku: x.sku, qty: 1 }] })} />}
                     </div>
                   )}
                   {!p.ee_product_done && (

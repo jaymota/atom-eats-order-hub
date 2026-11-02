@@ -27,12 +27,22 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [warn, setWarn] = useState('')
+  const [grnOn, setGrnOn] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.from('people').select('id, name').eq('active', true).order('name').then(({ data }) => setPeople(data ?? []))
   }, [])
 
   const d = draft
+  // A PO that was already received (GRN) must not be sent again.
+  useEffect(() => {
+    const po = String(d.po_number ?? '').trim()
+    if (po.length < 4) { setGrnOn(null); return }
+    const t = setTimeout(() => {
+      supabase.from('grns').select('grn_on').eq('po_number', po).maybeSingle().then(({ data }) => setGrnOn(data?.grn_on ?? null))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [d.po_number])
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...d, [k]: v })
   const inp = (k: keyof Draft) => ({ value: String(d[k] ?? ''), onChange: (e: { target: { value: string } }) => set(k, e.target.value as never) })
   const setLine = (key: string, patch: Partial<DraftLine>) => setDraft({ ...d, lines: d.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) })
@@ -59,6 +69,11 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
     setBusy(true)
     setError('')
     try {
+      if (!warn && grnOn) {
+        setWarn(`PO ${String(d.po_number).trim()} was already received (GRN on ${new Date(grnOn + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}). Don't send it again. Press save again only if this really is a new delivery.`)
+        setBusy(false)
+        return
+      }
       if (!warn) {
         const repeat = await findRepeat(d)
         if (repeat) {
@@ -105,7 +120,10 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
               {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           </Field>
-          <Field label="Party’s PO number" hint={po ? 'If they sent one. Otherwise the Hub makes one (AE-PO-…).' : 'Leave empty: the Hub makes one (AE-PO-…).'}><Input {...inp('po_number')} /></Field>
+          <Field label="Party’s PO number" hint={grnOn ? undefined : po ? 'If they sent one. Otherwise the Hub makes one (AE-PO-…).' : 'Leave empty: the Hub makes one (AE-PO-…).'}>
+            <Input {...inp('po_number')} />
+            {grnOn && <span className="mt-1 block text-sm font-semibold text-red-700">GRN already done</span>}
+          </Field>
           <Field label="PO date" hint="Empty = the order date"><Input type="date" {...inp('po_date')} /></Field>
           <Field label="PO expiry" hint="Deliver before this"><Input type="date" {...inp('po_expiry')} /></Field>
           <label className="flex min-h-12 items-center gap-2 self-end text-sm font-semibold text-stone-700">

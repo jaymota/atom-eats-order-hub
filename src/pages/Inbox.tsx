@@ -1,5 +1,5 @@
-// "To confirm": POs that came by email to sales@atomconsulting.in, GRNs to attach to their order,
-// and emails from senders we don't know.
+// "To confirm": POs that came by email to sales@atomconsulting.in, GRNs, and emails from senders we don't know.
+// GRN files are read when they arrive (PO numbers and quantities); the GRN tab lists every PO already received.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Badge, Button, Card, ErrorBox, Input, OkBox } from '../components/ui'
@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth'
 import { ago, isAdmin } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { todoChanged } from '../lib/todo'
-import { age, can } from '../lib/stages'
+import { age, can, rupees } from '../lib/stages'
 import { itemsShort } from './Orders'
 
 interface Mail {
@@ -16,11 +16,14 @@ interface Mail {
   inbox_files: { id: string; path: string; name: string }[]
 }
 interface OrderRef { id: string; order_no: string; po_number: string | null; customer_name: string; stage: string }
+interface Grn { po_number: string; source: string | null; grn_on: string; qty_po: number; qty_grn: number; amount: number; lines: { item: string; qty_po: number; qty_grn: number }[] }
 interface Sender { id: number; match: string; source: string; active: boolean }
 interface SalesOrder { id: string; order_no: string; customer_name: string; received_at: string; salesperson: { name: string } | null; order_lines: { product_name: string | null; qty: number }[] }
 
 const SOURCE: Record<string, string> = { blinkit: 'Blinkit', foodstories: 'Foodstories', foodsquare: 'Food Square', forwarded: 'Forwarded' }
 const TABS = [['sales', 'Sales'], ['po', 'POs'], ['grn', 'GRN'], ['other', 'Other'], ['done', 'Done']] as const
+
+const shortDay = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
 export default function Inbox() {
   const { me } = useAuth()
@@ -35,16 +38,21 @@ export default function Inbox() {
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
   const [add, setAdd] = useState({ match: '', source: '' })
+  const [grns, setGrns] = useState<Grn[]>([])
+  const [grnFind, setGrnFind] = useState('')
+  const [grnOpen, setGrnOpen] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [m, o, s, so, st] = await Promise.all([
+    const [m, o, s, so, st, g] = await Promise.all([
       supabase.from('inbox_emails').select('id, from_addr, from_name, subject, received_at, body_text, source, kind, status, order_id, note, inbox_files(id, path, name)')
         .order('received_at', { ascending: false }).limit(300),
       supabase.from('orders').select('id, order_no, po_number, customer_name, stage').not('po_number', 'is', null).order('created_at', { ascending: false }).limit(1000),
       supabase.from('inbox_senders').select('*').order('source'),
       supabase.from('orders').select('id, order_no, customer_name, received_at, salesperson:people!orders_salesperson_id_fkey(name), order_lines(product_name, qty)').eq('stage', 'sales_order').order('received_at'),
       supabase.from('inbox_status').select('last_check_at').maybeSingle(),
+      supabase.from('grns').select('po_number, source, grn_on, qty_po, qty_grn, amount, lines').order('grn_on', { ascending: false }).limit(1000),
     ])
+    setGrns((g.data ?? []) as Grn[])
     setChecked(st.data?.last_check_at ?? null)
     setSales((so.data ?? []) as unknown as SalesOrder[])
     // Open on the first tab that has something waiting.
@@ -65,6 +73,14 @@ export default function Inbox() {
     const hay = `${m.subject} ${m.body_text ?? ''}`
     return orders.filter((o) => o.po_number && o.po_number.length >= 4 && !o.po_number.startsWith('AE-PO') && hay.includes(o.po_number)).slice(0, 3)
   }
+
+  /** POs in this email that were already received (GRN), so the same PO is never sent twice. */
+  const grnFor = (m: Mail) => {
+    const hay = `${m.subject} ${m.body_text ?? ''} ${m.inbox_files.map((f) => f.name).join(' ')}`
+    return grns.filter((g) => hay.includes(g.po_number))
+  }
+  const orderFor = (po: string) => orders.find((o) => o.po_number === po)
+  const grnList = useMemo(() => grns.filter((g) => !grnFind.trim() || g.po_number.includes(grnFind.trim())), [grns, grnFind])
 
   const open = async (path: string) => {
     const { data } = await supabase.storage.from('order-files').createSignedUrl(path, 600)
@@ -125,7 +141,7 @@ export default function Inbox() {
             ))}
           </ul>
         )
-      ) : !mails ? <p className="text-sm text-stone-500">Loading…</p> : !list.length ? <Card><p className="text-stone-600">Nothing here.</p></Card> : (
+      ) : !mails ? <p className="text-sm text-stone-500">Loading…</p> : !list.length ? (tab === 'grn' ? null : <Card><p className="text-stone-600">Nothing here.</p></Card>) : (
         <ul className="space-y-2">
           {list.map((m) => {
             const found = m.kind !== 'po' || m.status !== 'new' ? matches(m) : []
@@ -136,6 +152,7 @@ export default function Inbox() {
                     <Badge tone={m.source ? 'green' : 'amber'}>{SOURCE[m.source ?? ''] ?? (m.source || 'Unknown sender')}</Badge>
                     {m.kind === 'revised' && <Badge tone="amber">Revised</Badge>}
                     {m.kind === 'grn' && <Badge>GRN</Badge>}
+                    {m.kind !== 'grn' && grnFor(m).map((g) => <Badge key={g.po_number} tone="red">GRN done {shortDay(g.grn_on)}</Badge>)}
                     <span className="text-xs text-stone-500">{ago(m.received_at)}</span>
                   </div>
                   <div className="font-semibold text-stone-900">{m.subject || '(no subject)'}</div>
@@ -173,6 +190,39 @@ export default function Inbox() {
             )
           })}
         </ul>
+      )}
+
+      {tab === 'grn' && (
+        <Card className="space-y-2 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-semibold text-ae-blue">GRN done ({grns.length})</h3>
+            <Input className="min-h-10 max-w-48 text-sm" inputMode="numeric" placeholder="PO no." value={grnFind} onChange={(e) => setGrnFind(e.target.value)} />
+          </div>
+          {!grnList.length ? <p className="text-sm text-stone-500">None.</p> : (
+            <ul className="divide-y divide-stone-100">
+              {grnList.map((g) => {
+                const o = orderFor(g.po_number)
+                const pct = g.qty_po ? Math.round((g.qty_grn / g.qty_po) * 100) : null
+                return (
+                  <li key={g.po_number} className="py-2 text-sm">
+                    <button type="button" className="flex w-full flex-wrap items-baseline justify-between gap-x-3 text-left" onClick={() => setGrnOpen(grnOpen === g.po_number ? null : g.po_number)}>
+                      <span className="font-mono font-semibold text-stone-900">{g.po_number}</span>
+                      <span className="text-stone-600">{shortDay(g.grn_on)} · {g.qty_grn}/{g.qty_po}{pct != null && ` (${pct}%)`} · {rupees(g.amount)}</span>
+                    </button>
+                    <div className="text-xs">
+                      {o ? <Link to={`/orders/${o.id}`} className="font-semibold text-ae-blue underline">{o.order_no} · {o.customer_name}</Link> : <span className="text-stone-500">Not in Hub</span>}
+                    </div>
+                    {grnOpen === g.po_number && (
+                      <ul className="mt-1 space-y-0.5 text-xs text-stone-600">
+                        {g.lines.map((l, i) => <li key={i} className={l.qty_grn < l.qty_po ? 'text-red-700' : ''}>{l.item} — {l.qty_grn}/{l.qty_po}</li>)}
+                      </ul>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </Card>
       )}
 
       {isAdmin(me?.role) && tab === 'other' && (

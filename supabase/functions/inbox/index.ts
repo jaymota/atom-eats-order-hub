@@ -5,6 +5,8 @@
 // Body: { id, threadId, from, fromName, subject, date, body, attachments: [{ name, mime, data (base64) }] }
 //   or: { ping: true, found } after each run, so the Hub can show when the mailbox was last checked.
 import { adminDb, json } from '../_shared/server.ts'
+import XLSX from 'npm:xlsx@0.18.5'
+import { readGrn, type GrnPo } from '../_shared/grn.ts'
 
 const OK_FILE = /\.(pdf|xlsx?|csv|png|jpe?g|webp)$/i
 const MAX_FILE = 10 * 1024 * 1024
@@ -14,6 +16,14 @@ function sameKey(a: string, b: string): boolean {
   let d = 0
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return d === 0
+}
+
+/** Every PO in a GRN workbook (all sheets). A file that can't be read gives nothing. */
+function grnFrom(bytes: Uint8Array): GrnPo[] {
+  try {
+    const wb = XLSX.read(bytes, { type: 'array' })
+    return wb.SheetNames.flatMap((n) => readGrn(XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: '', raw: false })))
+  } catch { return [] }
 }
 
 const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
@@ -63,6 +73,7 @@ Deno.serve(async (req) => {
   if (error) return json(req, { error: error.message }, 500)
 
   let files = 0
+  const grn: GrnPo[] = []
   for (const a of (Array.isArray(m.attachments) ? m.attachments : []).slice(0, 10) as { name?: string; mime?: string; data?: string }[]) {
     const name = String(a.name ?? 'file').slice(0, 120)
     if (!OK_FILE.test(name) || !a.data) continue
@@ -73,6 +84,9 @@ Deno.serve(async (req) => {
     if (up.error) continue
     await db.from('inbox_files').insert({ email_id: e.id, path, name, mime: a.mime ?? null, size_bytes: bytes.length })
     files++
+    if (kind === 'grn' && /\.(xlsx?|csv)$/i.test(name)) grn.push(...grnFrom(bytes))
   }
+  // A GRN that names its POs files itself: it goes onto those orders and leaves "To confirm".
+  if (grn.length) await db.rpc('record_grn', { p_email: e.id, p_pos: grn })
   return json(req, { ok: true, id: e.id, kind, source, files })
 })

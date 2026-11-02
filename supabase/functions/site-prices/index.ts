@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
       const name = v.title && !/default title/i.test(v.title) && !/pack of 1$/i.test(v.title) ? `${sp.title} - ${v.title}` : sp.title
       const p = bySku.get(sku)
       if (!p) {
-        const { error } = await db.from('products').insert({ sku, name, mrp, gst_rate: 5, ee_type: 'Combo', in_easy_ecom: true, is_offline: false,
+        const { error } = await db.from('products').insert({ sku, name, mrp, gst_rate: 5, ee_type: 'Combo', in_easy_ecom: false, is_offline: false, // created in Easy Ecom from Downloads
           site_combo: true, on_website: true, site_mrp: mrp, site_sku: sku, site_checked_at: now, image_url: sp.images?.[0]?.src ?? null })
         if (!error) added.push(`${name} (${sku})`)
         continue

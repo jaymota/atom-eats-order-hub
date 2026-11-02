@@ -1,10 +1,12 @@
-// Downloads: the evening Easy Ecom upload, new customers, per-order item files and the master list.
+// Downloads: the evening Easy Ecom upload, in Easy Ecom's order: 1 new customers, 2 new products (and
+// combos), 3 the orders. Plus per-order item files and the master list.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import EeSetup from '../components/EeSetup'
 import { Badge, Button, Card, ErrorBox, Input, OkBox, Select } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { fetchAll } from '../lib/catalog'
-import { masterRows, newCustomerRows, offlineRows, problems, itemRows, toCsv, wholesaleRows, type EeOrder } from '../lib/easyecom'
+import { masterRows, offlineRows, problems, itemRows, toCsv, wholesaleRows, type EeOrder } from '../lib/easyecom'
 import { rupees, todayIST } from '../lib/stages'
 import { supabase } from '../lib/supabase'
 import { StageBadge } from './Orders'
@@ -43,7 +45,7 @@ export default function Downloads() {
 
   const load = useCallback(async () => {
     const [o, p, pp] = await Promise.all([
-      fetchAll<EeOrder>('orders', COLS, (q) => q.not('invoice_no', 'is', null).neq('stage', 'cancelled').order('invoice_date').order('order_no')),
+      fetchAll<EeOrder>('orders', COLS, (q) => q.or('invoice_no.not.is.null,channel.eq.FOC').neq('stage', 'cancelled').order('invoice_date').order('order_no')),
       fetchAll<{ sku: string }>('products', 'sku', (q) => q.eq('in_easy_ecom', true)),
       supabase.from('people').select('id, name'),
     ])
@@ -67,7 +69,6 @@ export default function Downloads() {
   // Tick everything that is fine whenever the list changes.
   useEffect(() => { setPicked(new Set(ok.filter((o) => !o.ee_uploaded_at).map((o) => o.id))) }, [ok])
   const chosen = list.filter((o) => picked.has(o.id))
-  const newCust = newCustomerRows(chosen).length - 1
   const day = todayIST()
 
   const saveCode = async (o: EeOrder) => {
@@ -117,11 +118,13 @@ export default function Downloads() {
         <Input type="date" className="min-w-0" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" />
       </div>
 
+      {orders && <EeSetup orders={list} eeSkus={eeSkus} day={day} save={(n, d) => save(n, d, 'text/csv;charset=utf-8')} onChange={load} />}
+
       <Card className="space-y-3">
+        <h3 className="font-semibold text-ae-blue">3 · Orders</h3>
         <div className="text-sm text-stone-600"><b className="text-stone-900">{chosen.length}</b> orders · {units} units · {rupees(chosen.reduce((s, o) => s + Number(o.invoice_value ?? o.estimate_value), 0))}</div>
         <Button className="w-full" disabled={!chosen.length} onClick={() => csv(`easyecom-wholesale-${day}.csv`, wholesaleRows(chosen))}>⬇ Easy Ecom upload</Button>
         <div className="grid grid-cols-2 gap-2">
-          <Button tone="plain" disabled={!newCust} onClick={() => csv(`easyecom-new-customers-${day}.csv`, newCustomerRows(chosen))}>⬇ New customers ({newCust})</Button>
           <Button tone="plain" disabled={!chosen.length} onClick={master}>⬇ Master list</Button>
           <Button tone="plain" disabled={!chosen.length} onClick={() => csv(`easyecom-offline-import-${day}.csv`, offlineRows(chosen))}>⬇ Offline import</Button>
           <Button tone="plain" disabled={!chosen.length} onClick={zip}>⬇ Item files</Button>

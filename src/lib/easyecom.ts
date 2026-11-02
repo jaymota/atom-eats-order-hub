@@ -1,6 +1,7 @@
 // The files Easy Ecom takes in, built from Hub orders. Column names and order follow Easy Ecom's
 // own templates exactly (sample_order_import_format.csv, uploadOrderItemTemplate.csv, the
-// "Add Wholesale Orders in Bulk" template and the "B2B Customers" sheet).
+// "Add Wholesale Orders in Bulk" template, createCustomerTemplate.csv, create_product_template.csv
+// and the team's "Combo Product" sheet).
 import { isBulkPack } from './match'
 
 export interface EeLine {
@@ -99,11 +100,12 @@ export function offlineRows(orders: EeOrder[]): unknown[][] {
 export const ITEM_HEAD = ['Sku', 'Quantity', 'Price', 'EAN']
 export const itemRows = (o: EeOrder): unknown[][] => [ITEM_HEAD, ...o.order_lines.map((l) => [l.sku, l.qty, price(l.rate), ''])] // SKU only, as above
 
-// ---------- 4. New customers (Easy Ecom "B2B Customers" layout) ----------
-export const CUSTOMER_HEAD = ['Company Name', 'Email', 'Password', 'Tax Identification Number/ GST', 'Ship To GSTIN', 'Contact Number', 'Country', 'Billing_Name',
-  'Billing_State', 'Billing_Street', 'Billing_City', 'Billing_Postal Code', 'Currency', 'Description', 'Dispatch_Name', 'Dispatch_State', 'Dispatch_Street',
-  'Dispatch_City', 'Dispatch_Postal Code', 'Invoice_Group_Id', 'Shelf_Life', 'TCS Rate(Only for Indian Clients)', 'ERP CUSTOMER ID', 'Dl Number', 'Dl Expiry',
-  'Fssai Number', 'Fssai Expiry', 'Route Code', 'B2B Order Validity (days)', 'Send Email Upon Invoice Generation', 'Cancel if partially fulfilled (Yes/No)']
+// ---------- 4. New customers (Easy Ecom createCustomerTemplate.csv) ----------
+export const CUSTOMER_HEAD = ['Company Name', 'Email', 'Password', 'Tax Identification Number', 'Ship To GSTIN', 'Contact Number', 'Country', 'Billing_Name',
+  'Billing_State', 'Billing_Street', 'Billing_City', 'Billing_Postal Code', 'Currency', 'Description', 'Dispatch_Name', 'Dispatch_Company_Name', 'Dispatch_State',
+  'Dispatch_Street', 'Dispatch_City', 'Dispatch_Postal Code', 'Invoice_Group_Id', 'Shelf_Life', 'TCS Rate(Only for Indian Clients)', 'ERP CUSTOMER ID', 'Dl Number',
+  'Dl Expiry', 'Fssai Number', 'Fssai Expiry', 'Route Code', 'B2B Order Validity (days)', 'Send Email Upon Invoice Generation', 'Cancel if partially fulfilled (Yes/No)',
+  'Recipient Emails']
 
 /** Customers on these orders that Easy Ecom doesn't know yet (one row each). */
 export function newCustomerRows(orders: EeOrder[]): unknown[][] {
@@ -115,13 +117,69 @@ export function newCustomerRows(orders: EeOrder[]): unknown[][] {
     const s = shipTo(o)
     // The team's existing sheet uses dummy@gmail.com / 1234 when there is no email (Easy Ecom wants both).
     rows.push([o.customer_name, o.email || 'dummy@gmail.com', 1234, o.gstin ?? '', o.delivery_gstin ?? '', o.phone ?? '', 'India', o.customer_name,
-      o.billing_state ?? '', o.billing_address ?? '', o.billing_city ?? '', o.billing_pin ?? '', 'Indian Rupee', '', s.name, s.state ?? '', s.address ?? '',
-      s.city ?? '', s.pin ?? '', '', '', '', o.customer.code, '', '', o.fssai ?? '', '', '', '', '', ''])
+      o.billing_state ?? '', o.billing_address ?? '', o.billing_city ?? '', o.billing_pin ?? '', 'Indian Rupee', '', s.name, o.customer_name, s.state ?? '', s.address ?? '',
+      s.city ?? '', s.pin ?? '', '', '', '', o.customer.code, '', '', o.fssai ?? '', '', '', '', '', '', o.email ?? ''])
   }
   return rows
 }
 
-// ---------- 5. Master list (one row per product line) ----------
+// ---------- 5. New products (Easy Ecom create_product_template.csv) ----------
+// Laid out like the team's own past uploads: brand Atom Eats, Model Number = SKU, Material Type
+// "Finished", GST as "GST5", no barcode (Easy Ecom keeps none).
+export interface NewProduct {
+  sku: string; name: string; mrp: number | null; size: string | null; gst_rate: number | null; image_url: string | null
+  cost: number | null; weight_g: number | null; length_cm: number | null; height_cm: number | null; width_cm: number | null
+  parts: { sku: string; qty: number }[]
+}
+export const PRODUCT_HEAD = ['Brand*', 'Category*', 'Model Name', 'Model Number*', 'Description', 'Manufacturer Description', 'EAN|UPC', 'SKU*', 'Parent SKU',
+  'Material Type*', 'IS_MPS', 'Mrp', 'Cost*', 'Weight(gms)', 'Length(cms)', 'Height(cms)', 'Width(cms)', 'Primary Image URL', 'Product Tax Code', 'Color', 'Size',
+  'AccountingSKU', 'AccountingUnit', 'Flammable*', 'ProductTaxRule*', 'CESS', 'DBK Rate', 'DBK Serial Number']
+
+const n = (v: number | null | undefined) => (v == null ? '' : v)
+export const isComboProduct = (p: NewProduct) => p.parts.length > 0
+
+/** What still stops a new product from going in the file. */
+export function productGaps(p: NewProduct): string[] {
+  const g: string[] = []
+  if (p.sku.startsWith('CUSTOM-')) g.push('SKU')
+  if (p.cost == null) g.push('Cost')
+  if (p.mrp == null) g.push('MRP')
+  return g
+}
+
+export function productRows(ps: NewProduct[]): unknown[][] {
+  return [PRODUCT_HEAD, ...ps.map((p) => ['Atom Eats', isComboProduct(p) ? 'Combo Pack' : 'Snacks', p.name, p.sku, '', '', '', p.sku, '', 'Finished', 'No',
+    n(p.mrp), n(p.cost), n(p.weight_g), n(p.length_cm), n(p.height_cm), n(p.width_cm), p.image_url ?? '', '', '', p.size ?? '', '', '', 'No',
+    `GST${p.gst_rate ?? 5}`, 0, '', ''])]
+}
+
+// ---------- 6. Virtual combos (Easy Ecom's Virtual Combo / Combo Product sheet: each component as SKU&qty) ----------
+// Easy Ecom treats every combo, gift box and "pack of 3" as a virtual combo: SPK03 = SPK01&3.
+// The template has 20 component columns; Easy Ecom's own export adds more when a box has more (ALLIN01 has 23).
+const comboHead = (n: number) => ['PARENT SKU', ...Array.from({ length: Math.max(20, n) }, (_, i) => `Component ${i + 1} - SKU`)]
+export const COMBO_HEAD = comboHead(20)
+
+export function comboRows(ps: NewProduct[]): unknown[][] {
+  const combos = ps.filter(isComboProduct)
+  const n = Math.max(20, ...combos.map((p) => p.parts.length))
+  return [comboHead(n), ...combos.map((p) => {
+    const parts = p.parts.map((c) => `${c.sku}&${c.qty}`)
+    return [p.sku, ...parts, ...Array(n - parts.length).fill('')]
+  })]
+}
+
+// ---------- 7. Easy Ecom's Customer Master export → codes for the Hub ----------
+/** One entry per customer code (the export has a Billing and a Dispatch row each). */
+export function customerMasterCodes(rows: Record<string, unknown>[]): { code: string; name: string; gstin: string }[] {
+  const seen = new Map<string, { code: string; name: string; gstin: string }>()
+  for (const r of rows) {
+    const code = String(r.Customer_Code ?? '').trim()
+    if (code && !seen.has(code)) seen.set(code, { code, name: String(r.Company_Name ?? '').trim(), gstin: String(r.Gst_Number ?? '').trim() })
+  }
+  return [...seen.values()]
+}
+
+// ---------- 8. Master list (one row per product line) ----------
 export function masterRows(orders: EeOrder[], people: Map<string, string>): Record<string, unknown>[] {
   return orders.flatMap((o) => {
     const s = shipTo(o)

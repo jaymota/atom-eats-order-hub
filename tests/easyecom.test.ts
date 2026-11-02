@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OFFLINE_HEAD, WHOLESALE_HEAD, newCustomerRows, offlineRows, problems, toCsv, wholesaleRows, type EeOrder } from '../src/lib/easyecom'
+import { CUSTOMER_HEAD, OFFLINE_HEAD, PRODUCT_HEAD, WHOLESALE_HEAD, comboRows, customerMasterCodes, newCustomerRows, productGaps, productRows, offlineRows, problems, toCsv, wholesaleRows, type EeOrder } from '../src/lib/easyecom'
 
 const o = (x: Partial<EeOrder> = {}): EeOrder => ({
   id: '1', order_no: 'ORD-00009', order_date: '2026-10-27', channel: 'B2B', stage: 'dispatched', salesperson_id: null,
@@ -35,7 +35,28 @@ describe('Easy Ecom files', () => {
     const fresh = o({ customer: { code: 'AE-0007', ee_customer_code: null, in_easy_ecom: false } })
     const r = newCustomerRows([fresh, { ...fresh, id: '2' }])
     expect(r.length).toBe(2)
-    expect(r[1][22]).toBe('AE-0007')
+    expect(r[1].length).toBe(CUSTOMER_HEAD.length)
+    expect(r[1][CUSTOMER_HEAD.indexOf('ERP CUSTOMER ID')]).toBe('AE-0007')
+  })
+  it('new products and combo contents in Easy Ecom\'s layouts', () => {
+    const p = { sku: 'GIFT01', name: 'Gift Box', mrp: 999, size: null, gst_rate: 5, image_url: null, cost: 400, weight_g: 900, length_cm: 30, height_cm: 10, width_cm: 20,
+      parts: [{ sku: 'TPC01', qty: 2 }, { sku: 'SPK01', qty: 1 }] }
+    const r = productRows([p])
+    expect(r[1].length).toBe(PRODUCT_HEAD.length)
+    expect(r[1].slice(0, 4)).toEqual(['Atom Eats', 'Combo Pack', 'Gift Box', 'GIFT01'])
+    expect(r[1][PRODUCT_HEAD.indexOf('Cost*')]).toBe(400)
+    expect(r[1][PRODUCT_HEAD.indexOf('ProductTaxRule*')]).toBe('GST5')
+    const c = comboRows([p, { ...p, sku: 'TPC09', parts: [] }])
+    expect(c.length).toBe(2)
+    expect(c[1].slice(0, 3)).toEqual(['GIFT01', 'TPC01&2', 'SPK01&1'])
+    expect(productGaps({ ...p, sku: 'CUSTOM-0001', cost: null })).toEqual(['SKU', 'Cost'])
+    const big = comboRows([{ ...p, parts: Array.from({ length: 23 }, (_, i) => ({ sku: `S${i}`, qty: 1 })) }])
+    expect(big[0].length).toBe(24) // more than the template's 20 components, like Easy Ecom's own export
+    expect(big[1][23]).toBe('S22&1')
+  })
+  it('reads codes from the Customer Master export once per customer', () => {
+    const rows = [{ Customer_Code: 'X1', Company_Name: 'Shop', Gst_Number: '27AAA', 'Address Type': 'Billing' }, { Customer_Code: 'X1', Company_Name: 'Shop', 'Address Type': 'Dispatch' }]
+    expect(customerMasterCodes(rows)).toEqual([{ code: 'X1', name: 'Shop', gstin: '27AAA' }])
   })
   it('flags SKUs Easy Ecom does not have', () => {
     expect(problems(o(), new Set(['TPC01']))).toEqual([])

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, ErrorBox, Input } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { productLabel, searchProducts, useCatalog, type Product } from '../lib/catalog'
-import { ago, isAdmin } from '../lib/format'
+import { ago, isAdmin, isFullAdmin } from '../lib/format'
 import { gstinState, GST_STATES, nameSimilarity } from '../lib/match'
 import { supabase } from '../lib/supabase'
 import { CUSTOMER_COLS, type Customer } from './Customers'
@@ -334,7 +334,7 @@ export default function Checks() {
           </button>
         ))}
       </div>
-      {tab === 'duplicates' && <Duplicates admin={admin} onCount={dupCount} />}
+      {tab === 'duplicates' && <Duplicates admin={isFullAdmin(me?.role)} onCount={dupCount} />}
       {tab === 'nicknames' && <Nicknames admin={admin} onCount={nickCount} />}
       {tab === 'prices' && <Prices admin={admin} onCount={priceCount} />}
       {tab === 'tally' && <TallyNames canEdit={admin || me?.role === 'accounts'} onCount={tallyCount} />}

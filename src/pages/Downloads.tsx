@@ -39,7 +39,7 @@ export default function Downloads() {
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const allowed = ['super_admin', 'admin', 'ops', 'accounts'].includes(me?.role ?? '')
+  const allowed = ['super_admin', 'admin', 'manager', 'ops', 'accounts'].includes(me?.role ?? '')
 
   const load = useCallback(async () => {
     const [o, p, pp] = await Promise.all([

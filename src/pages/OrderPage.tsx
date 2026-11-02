@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge, Button, Card, ErrorBox, Input, OkBox } from '../components/ui'
 import OrderReview from '../components/OrderReview'
 import { useAuth } from '../lib/auth'
-import { istDateTime } from '../lib/format'
+import { isAdmin, istDateTime } from '../lib/format'
 import { BASIS_LABEL, loadDraft, type Draft, type PriceBasis } from '../lib/orders'
 import { compressImage } from '../lib/readers'
 import { age, can, isLate, notify, rupees, todayIST, attachFile, type Stage } from '../lib/stages'
@@ -92,9 +92,9 @@ export default function OrderPage() {
   }
 
   const late = isLate(o.stage, o.received_at)
-  const canEdit = me?.role !== 'accounts' && (['sales_order', 'new', 'on_hold'].includes(o.stage) || me?.role === 'super_admin' || me?.role === 'admin')
+  const canEdit = me?.role !== 'accounts' && (['sales_order', 'new', 'on_hold'].includes(o.stage) || isAdmin(me?.role))
   const back = me?.role === 'sales' ? ['/orders/new', '← New order'] : me?.role === 'accounts' ? ['/invoices', '← All invoices'] : ['/orders', '← All orders']
-  const canHold = ['super_admin', 'admin', 'ops'].includes(me?.role ?? '')
+  const canHold = ['super_admin', 'admin', 'manager', 'ops'].includes(me?.role ?? '')
   const deliverTo = o.same_as_billing
     ? [o.customer_name, o.billing_address, o.billing_city, o.billing_state, o.billing_pin]
     : [o.delivery_name, o.delivery_address, o.delivery_city, o.delivery_state, o.delivery_pin]

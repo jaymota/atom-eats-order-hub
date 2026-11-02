@@ -42,9 +42,9 @@ export const COURIERS = ['DTDC', 'Porter', 'Customer pickup', 'Other'] as const
 
 /** Who may do what (the database checks this too). */
 export const can = {
-  plan: (r?: string) => ['super_admin', 'admin', 'ops'].includes(r ?? ''),
-  invoice: (r?: string) => ['super_admin', 'admin', 'accounts'].includes(r ?? ''),
-  dispatch: (r?: string) => ['super_admin', 'admin', 'ops'].includes(r ?? ''),
+  plan: (r?: string) => ['super_admin', 'admin', 'manager', 'ops'].includes(r ?? ''),
+  invoice: (r?: string) => ['super_admin', 'admin', 'manager', 'accounts'].includes(r ?? ''),
+  dispatch: (r?: string) => ['super_admin', 'admin', 'manager', 'ops'].includes(r ?? ''),
 }
 
 /** Today in India, as yyyy-mm-dd. */

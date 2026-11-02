@@ -1,8 +1,9 @@
-export type Role = 'super_admin' | 'admin' | 'accounts' | 'ops' | 'sales'
+export type Role = 'super_admin' | 'admin' | 'manager' | 'accounts' | 'ops' | 'sales'
 
 export const ROLE_NAMES: Record<Role, string> = {
   super_admin: 'Super admin',
   admin: 'Admin',
+  manager: 'Manager',
   accounts: 'Accounts',
   ops: 'Ops / dispatch',
   sales: 'Sales',
@@ -11,12 +12,16 @@ export const ROLE_NAMES: Record<Role, string> = {
 export const ROLE_HELP: Record<Role, string> = {
   super_admin: 'Everything, including managing admins and settings.',
   admin: 'Everything except managing other admins.',
+  manager: 'Sees and does everything except the team, PINs and merging customers.',
   accounts: 'Records invoices.',
   ops: 'Plans dispatch, marks orders dispatched, adds tracking. Can also enter orders.',
   sales: 'Enters orders and sees all orders. Can’t move orders between stages.',
 }
 
-export const isAdmin = (r: Role | undefined) => r === 'super_admin' || r === 'admin'
+/** Admin work: products, prices, checks, editing any order. Managers included. */
+export const isAdmin = (r: Role | undefined) => r === 'super_admin' || r === 'admin' || r === 'manager'
+/** The team, PINs and merging customers: real admins only. */
+export const isFullAdmin = (r: Role | undefined) => r === 'super_admin' || r === 'admin'
 
 /** "24 Oct 2026, 6:42 pm" in India time. */
 export function istDateTime(iso: string | null | undefined): string {

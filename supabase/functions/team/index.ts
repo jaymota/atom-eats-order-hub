@@ -8,7 +8,7 @@ import { SUPABASE_URL, adminDb, cors, json, logActivity } from '../_shared/serve
 import { ROLES, normaliseUsername, randomPin, type Role } from '../_shared/pin.ts'
 
 const ROLE_NAMES: Record<Role, string> = {
-  super_admin: 'Super admin', admin: 'Admin', accounts: 'Accounts', ops: 'Ops / dispatch', sales: 'Sales',
+  super_admin: 'Super admin', admin: 'Admin', manager: 'Manager', accounts: 'Accounts', ops: 'Ops / dispatch', sales: 'Sales',
 }
 const isAdminRole = (r: string) => r === 'super_admin' || r === 'admin'
 

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Badge, Button, Card, ErrorBox, Field, Input, Select } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { ROLE_HELP, ROLE_NAMES, ago, isAdmin, type Role } from '../lib/format'
+import { ROLE_HELP, ROLE_NAMES, ago, isFullAdmin, type Role } from '../lib/format'
 import { callFn, supabase } from '../lib/supabase'
 
 interface Person {
@@ -17,7 +17,7 @@ interface Person {
   last_login_at: string | null
 }
 
-const ROLE_ORDER: Role[] = ['super_admin', 'admin', 'accounts', 'ops', 'sales']
+const ROLE_ORDER: Role[] = ['super_admin', 'admin', 'manager', 'accounts', 'ops', 'sales']
 
 function suggestUsername(name: string) {
   return (name.trim().split(/\s+/)[0] ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9.]/g, '')
@@ -107,7 +107,7 @@ export default function Team() {
   const [pinShown, setPinShown] = useState<{ name: string; pin: string } | null>(null)
   const [error, setError] = useState('')
 
-  const admin = isAdmin(me?.role)
+  const admin = isFullAdmin(me?.role)
   const isSuper = me?.role === 'super_admin'
   const mayManage = (r: Role) => isSuper || (admin && r !== 'super_admin' && r !== 'admin')
   const assignable = ROLE_ORDER.filter((r) => mayManage(r))
@@ -158,7 +158,7 @@ export default function Team() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-stone-900">{p.name}</span>
-                <Badge tone={isAdmin(p.role) ? 'amber' : 'stone'}>{ROLE_NAMES[p.role]}</Badge>
+                <Badge tone={isFullAdmin(p.role) ? 'amber' : 'stone'}>{ROLE_NAMES[p.role]}</Badge>
                 {locked[p.id] && <Badge tone="red">Locked</Badge>}
                 {!p.active && <Badge tone="red">Switched off</Badge>}
                 {p.active && p.must_change_pin && <Badge>Hasn’t chosen own PIN yet</Badge>}

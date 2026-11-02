@@ -1,7 +1,7 @@
 // Who sees which page. Sales (field sales) only enters orders; Accounts only sees invoices and dispatch.
 // The database enforces the same limits, so a hidden page can't be reached by typing its address.
-const TEAM = ['super_admin', 'admin', 'ops']
-const ACC = ['super_admin', 'admin', 'accounts']
+const TEAM = ['super_admin', 'admin', 'manager', 'ops']
+const ACC = ['super_admin', 'admin', 'manager', 'accounts']
 const ALL = [...TEAM, 'accounts', 'sales']
 
 export const PAGE_ROLES: Record<string, string[]> = {

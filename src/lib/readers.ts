@@ -26,7 +26,8 @@ export async function readImage(file: Blob, onProgress?: Progress): Promise<{ te
  *  fails on older phones and laptops with "a.toHex is not a function". */
 async function loadPdfjs() {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString()
+  // A fixed file name (copied in at build time), so a page left open across an update still finds it.
+  pdfjs.GlobalWorkerOptions.workerSrc = `${import.meta.env.BASE_URL}pdf.worker.min.mjs`
   return pdfjs
 }
 

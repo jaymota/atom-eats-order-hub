@@ -15,5 +15,8 @@ dist/
 .claude/
 scratch/
 
+# Copied from node_modules at build time (fixed name, so open pages survive updates)
+public/pdf.worker.min.mjs
+
 # Screen-reader language data downloaded during local tests
 *.traineddata

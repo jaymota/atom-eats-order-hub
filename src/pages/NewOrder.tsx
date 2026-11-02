@@ -17,6 +17,7 @@ import { readImage, readPoFiles } from '../lib/readers'
 import { CHANNEL_FOR, FORMAT_NAME, type PoLine, type PoRead } from '../lib/po'
 import { guessCustomerNames, resolveCustomer, resolveItems, type CustomerGuess, type CustomerLite, type ResolvedItem } from '../lib/resolve'
 import { supabase } from '../lib/supabase'
+import { isUpdateError, reloadForUpdate } from '../lib/update'
 import { CHANNELS, CHANNEL_HINT } from '../lib/channels'
 
 type Q =
@@ -93,6 +94,7 @@ function InputStep({ onRead, onGt }: { onRead: OnRead; onGt: () => void }) {
       onRead(r.text, fs, 'po_file', r.sheetItems, r.po)
     } catch (e) {
       setBusy('')
+      if (isUpdateError(e) && reloadForUpdate()) return // the Hub was updated while this page was open
       setError(`Couldn’t read the file: ${(e as Error).message}`)
     }
   }
@@ -410,7 +412,10 @@ export default function NewOrder() {
         }
         const r = await readPoFiles(files, e?.subject ?? '')
         await start(r.text || e?.body_text || '', files, 'email', r.sheetItems, r.po, inboxId)
-      } catch (err) { setMailError((err as Error).message) }
+      } catch (err) {
+        if (isUpdateError(err) && reloadForUpdate()) return
+        setMailError((err as Error).message)
+      }
     })()
   }, [inboxId, catalog]) // eslint-disable-line react-hooks/exhaustive-deps
 

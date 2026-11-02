@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AddProduct from '../components/AddProduct'
 import { Badge, Button, Card, ErrorBox, Field, Input, Select } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { ALIAS_KINDS, productLabel, searchProducts, useCatalog, type Product } from '../lib/catalog'
+import { ALIAS_KINDS, orderable, productLabel, searchProducts, useCatalog, type Product } from '../lib/catalog'
 import { ago, isAdmin } from '../lib/format'
 import { supabase } from '../lib/supabase'
 
@@ -172,7 +172,7 @@ export default function Products() {
 
   const list = useMemo(() => {
     if (!catalog) return []
-    const base = q ? searchProducts(catalog, q, { offlineOnly: filter !== 'all', limit: 100 }) : catalog.products.filter((p) => p.is_offline || filter === 'all')
+    const base = q ? searchProducts(catalog, q, { offlineOnly: filter !== 'all', limit: 100 }) : catalog.products.filter((p) => orderable(p) || filter === 'all')
     return base.filter((p) => filter !== 'retail' || p.is_retail)
   }, [catalog, q, filter])
 
@@ -214,7 +214,8 @@ export default function Products() {
                   <div className="flex flex-wrap gap-1.5">
                     {p.is_retail && <Badge tone="amber">Retail</Badge>}
                     {p.ee_type === 'Combo' && <Badge>Combo</Badge>}
-                    {!p.is_offline && <Badge>Not offline</Badge>}
+                    {p.site_combo && <Badge tone={p.on_website ? 'green' : 'stone'}>{p.on_website ? 'Website combo' : 'Off the website'}</Badge>}
+                    {!orderable(p) && <Badge>Not offline</Badge>}
                     {!p.in_easy_ecom && <Badge tone="red">Not in Easy Ecom</Badge>}
                     {p.site_mrp != null && p.site_mrp !== p.mrp && <Badge tone="amber">Website ₹{p.site_mrp}</Badge>}
                     <TallyBadge p={p} />

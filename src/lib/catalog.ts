@@ -22,6 +22,8 @@ export interface Product {
   in_easy_ecom: boolean
   site_mrp: number | null      // price on atomeats.com at the last check
   site_checked_at: string | null
+  on_website: boolean    // live on atomeats.com at the last check (every 6 hours)
+  site_combo: boolean    // a combo / gift box / variety pack on the website
 }
 
 export interface Alias {
@@ -72,7 +74,7 @@ let cache: Catalog | null = null
 export async function loadCatalog(force = false): Promise<Catalog> {
   if (cache && !force) return cache
   const [products, aliases] = await Promise.all([
-    fetchAll<Product>('products', 'sku, name, size, mrp, ee_type, gst_rate, hsn, ean, image_url, tally_name, tally_status, is_offline, is_retail, replaced_by, notes, in_easy_ecom, site_mrp, site_checked_at', (q) => q.order('name')),
+    fetchAll<Product>('products', 'sku, name, size, mrp, ee_type, gst_rate, hsn, ean, image_url, tally_name, tally_status, is_offline, is_retail, replaced_by, notes, in_easy_ecom, site_mrp, site_checked_at, on_website, site_combo', (q) => q.order('name')),
     fetchAll<Alias>('product_aliases', 'id, sku, alias, alias_norm, kind, status, source, times_seen', (q) => q.neq('status', 'rejected')),
   ])
   const aliasesBySku = new Map<string, Alias[]>()
@@ -95,6 +97,9 @@ export function useCatalog() {
   return { catalog, error, reload }
 }
 
+/** What the team can pick on an order: offline SKUs, plus the website's live combos and gift boxes. */
+export const orderable = (p: Pick<Product, 'is_offline' | 'site_combo' | 'on_website'>) => p.is_offline || (p.site_combo && p.on_website)
+
 /** Bulk packs (500 g, 1 kg) are sold at an agreed rate, so their MRP is never shown or used. */
 export const isBulk = (p: { size: string | null; name: string }) => isBulkPack(p.size || p.name)
 
@@ -109,7 +114,7 @@ export function productLabel(p: Product): string {
 export function searchProducts(c: Catalog, query: string, opts: { offlineOnly?: boolean; limit?: number } = {}): Product[] {
   const q = query.trim()
   const limit = opts.limit ?? 30
-  const pool = opts.offlineOnly ? c.products.filter((p) => p.is_offline) : c.products
+  const pool = opts.offlineOnly ? c.products.filter(orderable) : c.products
   if (!q) return pool.slice(0, limit)
   const qn = norm(q)
   const qt = tidy(q)
@@ -125,7 +130,7 @@ export function searchProducts(c: Catalog, query: string, opts: { offlineOnly?: 
       else if (nn.includes(qt) && qt.length >= 3) s = Math.max(s, 3)
       s = Math.max(s, scoreProduct(qf, { ...features(n), mrp: p.mrp }) * 2.5)
     }
-    if (p.is_offline) s += 0.2
+    if (orderable(p)) s += 0.2
     return { p, s }
   })
   return scored.filter((x) => x.s >= 1.2).sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.p)

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Button, Card, ErrorBox, Input } from './ui'
 import CustomerSearch from './CustomerSearch'
 import { useAuth } from '../lib/auth'
-import { isBulk, productLabel, useCatalog, type Product } from '../lib/catalog'
+import { isBulk, orderable, productLabel, useCatalog, type Product } from '../lib/catalog'
 import { norm } from '../lib/match'
 import type { CustomerLite } from '../lib/resolve'
 import { supabase } from '../lib/supabase'
@@ -27,8 +27,9 @@ export default function GtForm({ onBack, foc = false }: { onBack: () => void; fo
   const products = useMemo(() => {
     const qn = norm(q)
     return (catalog?.products ?? [])
-      .filter((p) => p.is_offline && !p.replaced_by && (bulk || !isBulk(p)) && (!qn || norm(`${p.name} ${p.size ?? ''} ${p.sku}`).includes(qn)))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .filter((p) => orderable(p) && !p.replaced_by && (bulk || !isBulk(p)) && (!qn || norm(`${p.name} ${p.size ?? ''} ${p.sku}`).includes(qn)))
+      // Single packs first, then the website's combos and gift boxes.
+      .sort((a, b) => Number(a.site_combo && !a.is_offline) - Number(b.site_combo && !b.is_offline) || a.name.localeCompare(b.name))
   }, [catalog, q, bulk])
   const picked = Object.entries(qty).filter(([, n]) => n > 0)
   const name = party?.name ?? newName.trim()
@@ -93,15 +94,19 @@ export default function GtForm({ onBack, foc = false }: { onBack: () => void; fo
         </div>
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product" />
         <ul className="divide-y divide-stone-100">
-          {products.map((p: Product) => {
+          {products.map((p: Product, i) => {
             const n = qty[p.sku] ?? 0
+            const comboStart = p.site_combo && !p.is_offline && !(products[i - 1]?.site_combo && !products[i - 1]?.is_offline)
             return (
-              <li key={p.sku} className={`flex items-center gap-2 py-2 ${n ? 'bg-ae-yellow/30' : ''}`}>
+              <li key={p.sku} className={`py-2 ${n ? 'bg-ae-yellow/30' : ''}`}>
+                {comboStart && <div className="mb-2 mt-2 text-xs font-bold uppercase tracking-wide text-ae-blue">Combos &amp; boxes</div>}
+                <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1 text-sm font-semibold text-stone-900">{productLabel(p)}</div>
                 <button type="button" aria-label="Less" className="h-11 w-11 rounded-lg border border-stone-300 bg-white text-xl font-bold" onClick={() => set(p.sku, n - 1)}>−</button>
                 <input inputMode="numeric" aria-label={`Quantity of ${p.name}`} className="h-11 w-14 rounded-lg border border-stone-300 text-center text-base" value={n || ''}
                   placeholder="0" onFocus={(e) => e.target.select()} onChange={(e) => set(p.sku, Number(e.target.value.replace(/\D/g, '')) || 0)} />
                 <button type="button" aria-label="More" className="h-11 w-11 rounded-lg bg-ae-blue text-xl font-bold text-ae-cream" onClick={() => set(p.sku, n + 1)}>+</button>
+                </div>
               </li>
             )
           })}

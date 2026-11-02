@@ -32,7 +32,7 @@ function index(c: Catalog) {
   }
   const cands: Cand[] = []
   for (const p of c.products) {
-    if (!p.is_offline || p.replaced_by) continue
+    if (!(p.is_offline || (p.site_combo && p.on_website)) || p.replaced_by) continue // offline SKUs + website combos
     const texts = [`${p.name} ${p.size ?? ''}`]
     put(texts[0], p.sku)
     for (const a of c.aliasesBySku.get(p.sku) ?? []) {

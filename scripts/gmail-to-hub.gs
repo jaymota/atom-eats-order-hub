@@ -72,3 +72,11 @@ function showTimers() {
   console.log('Timers: ' + ts.length + ' · running as ' + Session.getEffectiveUser().getEmail())
   for (const t of ts) console.log('  ' + t.getHandlerFunction() + ' · ' + t.getEventType())
 }
+
+// The Hub's own timer (a GitHub job, every 15 minutes) calls this script's web-app address, so the
+// mailbox is checked even where Google's own timers don't run. The secret key must match.
+function doGet(e) {
+  if (!e || !e.parameter || e.parameter.key !== HUB_KEY) return ContentService.createTextOutput('not allowed')
+  sendNewEmails()
+  return ContentService.createTextOutput('ok')
+}

@@ -1,0 +1,23 @@
+# Every 15 minutes, starts the Google Apps Script inside sales@ so new PO emails reach the Hub.
+# (Google's own timer doesn't run for that account, so the Hub keeps the time itself.)
+# Needs two repository secrets: MAIL_CHECK_URL (the script's web-app address) and INBOX_KEY.
+name: Check PO mail
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the mailbox check
+        env:
+          MAIL_CHECK_URL: ${{ secrets.MAIL_CHECK_URL }}
+          INBOX_KEY: ${{ secrets.INBOX_KEY }}
+        run: |
+          if [ -z "$MAIL_CHECK_URL" ] || [ -z "$INBOX_KEY" ]; then echo "Mail check not set up yet"; exit 0; fi
+          out=$(curl -sSL --max-time 300 "$MAIL_CHECK_URL?key=$INBOX_KEY")
+          echo "$out" | head -c 200
+          [ "$out" = "ok" ]

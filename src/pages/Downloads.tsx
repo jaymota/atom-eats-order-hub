@@ -1,5 +1,5 @@
-// Downloads: the evening Easy Ecom upload, in Easy Ecom's order: 1 new customers, 2 new products (and
-// combos), 3 the orders. Plus per-order item files and the master list.
+// Downloads: the evening Easy Ecom upload as six fixed options (components/EeSetup), the orders
+// they cover, and other files (master list, offline import, per-order item files).
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import EeSetup from '../components/EeSetup'
@@ -118,18 +118,18 @@ export default function Downloads() {
         <Input type="date" className="min-w-0" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" />
       </div>
 
-      {orders && <EeSetup orders={list} eeSkus={eeSkus} day={day} save={(n, d) => save(n, d, 'text/csv;charset=utf-8')} onChange={load} />}
+      {orders && (
+        <EeSetup orders={list} eeSkus={eeSkus} day={day} save={(n, d) => save(n, d, 'text/csv;charset=utf-8')} onChange={load}
+          ready={chosen.filter((o) => !o.ee_uploaded_at).length} total={list.filter((o) => !o.ee_uploaded_at).length}
+          onOrders={() => csv(`easyecom-wholesale-${day}.csv`, wholesaleRows(chosen.filter((o) => !o.ee_uploaded_at)))} />
+      )}
 
-      <Card className="space-y-3">
-        <h3 className="font-semibold text-ae-blue">3 · Orders</h3>
-        <div className="text-sm text-stone-600"><b className="text-stone-900">{chosen.length}</b> orders · {units} units · {rupees(chosen.reduce((s, o) => s + Number(o.invoice_value ?? o.estimate_value), 0))}</div>
-        <Button className="w-full" disabled={!chosen.length} onClick={() => csv(`easyecom-wholesale-${day}.csv`, wholesaleRows(chosen))}>⬇ Easy Ecom upload</Button>
-        <div className="grid grid-cols-2 gap-2">
-          <Button tone="plain" disabled={!chosen.length} onClick={master}>⬇ Master list</Button>
-          <Button tone="plain" disabled={!chosen.length} onClick={() => csv(`easyecom-offline-import-${day}.csv`, offlineRows(chosen))}>⬇ Offline import</Button>
-          <Button tone="plain" disabled={!chosen.length} onClick={zip}>⬇ Item files</Button>
-        </div>
-      </Card>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-600">
+        <span><b className="text-stone-900">{chosen.length}</b> ticked · {units} units · {rupees(chosen.reduce((s, o) => s + Number(o.invoice_value ?? o.estimate_value), 0))}</span>
+        <button type="button" className="underline disabled:opacity-40" disabled={!chosen.length} onClick={master}>Master list</button>
+        <button type="button" className="underline disabled:opacity-40" disabled={!chosen.length} onClick={() => csv(`easyecom-offline-import-${day}.csv`, offlineRows(chosen))}>Offline import</button>
+        <button type="button" className="underline disabled:opacity-40" disabled={!chosen.length} onClick={zip}>Item files</button>
+      </div>
 
       <OkBox>{msg}</OkBox>
       <ErrorBox>{error}</ErrorBox>

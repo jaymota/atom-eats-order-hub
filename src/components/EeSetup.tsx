@@ -1,8 +1,8 @@
-// Downloads, steps 1 and 2: what Easy Ecom must know before the orders can go in.
-// 1. New customers: the customer file, then Easy Ecom's Customer Master export brings their codes back.
-// 2. New products: cost, weight and size (and for a combo, what's inside), then the product file and
-//    the combo file. Step 3 (the orders) is the Downloads page itself.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+// Downloads: the day's Easy Ecom work as six fixed options, always in the same place.
+// 1 new customers → Easy Ecom, 2 their codes back from Easy Ecom's Customer Master, 3 new products,
+// 4 new virtual combos, 5 the final order upload (only when 1–4 left nothing behind), 6 only the orders
+// that are ready. Below: the details new products need (cost, size, and for a combo what's inside).
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { comboRows, customerMasterCodes, newCustomerRows, productGaps, productRows, toCsv, type EeOrder, type NewProduct } from '../lib/easyecom'
 import { supabase } from '../lib/supabase'
 import { ProductPicker } from '../pages/Checks'
@@ -15,8 +15,19 @@ const str = (v: number | null) => (v == null ? '' : String(v))
 const toEdit = (p: Row): Edit => ({ sku: p.sku.startsWith('CUSTOM-') ? '' : p.sku, cost: str(p.cost), weight_g: str(p.weight_g), length_cm: str(p.length_cm), height_cm: str(p.height_cm), width_cm: str(p.width_cm), parts: p.parts })
 const isCombo = (p: Row) => p.ee_type === 'Combo' || p.site_combo || p.parts.length > 0
 
-export default function EeSetup({ orders, eeSkus, day, save, onChange }: {
+function Option({ n, children, done }: { n: number; children: ReactNode; done?: ReactNode }) {
+  return (
+    <li className="flex items-center gap-3 py-2">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ae-blue text-sm font-bold text-ae-cream">{n}</span>
+      <div className="min-w-0 flex-1">{children}</div>
+      {done}
+    </li>
+  )
+}
+
+export default function EeSetup({ orders, eeSkus, day, save, onChange, ready, total, onOrders }: {
   orders: EeOrder[]; eeSkus: Set<string>; day: string; save: (name: string, data: string) => void; onChange: () => void
+  ready: number; total: number; onOrders: () => void
 }) {
   const [rows, setRows] = useState<Row[]>([])
   const [edit, setEdit] = useState<Record<string, Edit>>({})
@@ -27,7 +38,6 @@ export default function EeSetup({ orders, eeSkus, day, save, onChange }: {
 
   const waiting = useMemo(() => orders.filter((o) => !o.ee_uploaded_at), [orders])
   const customers = newCustomerRows(waiting).length - 1
-  const custNames = [...new Set(waiting.filter((o) => o.customer && !o.customer.ee_customer_code).map((o) => o.customer_name))]
   const skus = useMemo(() => [...new Set(waiting.flatMap((o) => o.order_lines.map((l) => l.sku)).filter((s) => !eeSkus.has(s)))].sort(), [waiting, eeSkus])
 
   const load = useCallback(async () => {
@@ -45,24 +55,21 @@ export default function EeSetup({ orders, eeSkus, day, save, onChange }: {
   useEffect(() => { load() }, [load])
 
   const gaps = (p: Row) => [...productGaps(p), ...(isCombo(p) && !p.parts.length ? ['Inside'] : [])]
-  const toCreate = rows.filter((p) => !p.ee_product_done)
-  const combosLeft = rows.filter((p) => p.ee_product_done && p.parts.length)
-  const ready = toCreate.length > 0 && toCreate.every((p) => !gaps(p).length)
+  const products = rows.filter((p) => !p.ee_product_done)
+  const combos = rows.filter((p) => p.ee_product_done && p.parts.length)
+  const productsReady = products.length > 0 && products.every((p) => !gaps(p).length)
 
   const run = async (fn: () => PromiseLike<{ data?: unknown; error: { message: string } | null }>, ok: (d: unknown) => string) => {
     setBusy(true); setError(''); setMsg('')
     const { data, error: e } = await fn()
     setBusy(false)
-    if (e) { setError(e.message); return false }
+    if (e) { setError(e.message); return }
     setMsg(ok(data)); await load(); onChange()
-    return true
   }
-
   const saveRow = (p: Row) => {
     const e = edit[p.sku]
-    return run(() => supabase.rpc('save_new_product', { p_sku: p.sku, p: { ...e, sku: e.sku || null } }), () => `Saved ${p.name}.`)
+    run(() => supabase.rpc('save_new_product', { p_sku: p.sku, p: { ...e, sku: e.sku || null } }), () => `Saved ${p.name}.`)
   }
-
   const readMaster = async (f: File) => {
     const X = await import('xlsx')
     const wb = X.read(await f.arrayBuffer(), { type: 'array', raw: false })
@@ -70,32 +77,44 @@ export default function EeSetup({ orders, eeSkus, day, save, onChange }: {
     if (!list.length) { setError('That file has no Customer_Code column. Use Easy Ecom → Masters → Customer Master → export.'); return }
     run(() => supabase.rpc('link_ee_customer_codes', { p_rows: list }), (n) => `${n} customer${n === 1 ? '' : 's'} linked to Easy Ecom.`)
   }
-
-  if (!customers && !custNames.length && !rows.length) return null
   const setE = (sku: string, patch: Partial<Edit>) => setEdit({ ...edit, [sku]: { ...edit[sku], ...patch } })
+  const doneBtn = (on: boolean, fn: () => void) => <Button tone="plain" className="min-h-10 shrink-0 px-3 text-sm" disabled={!on || busy} onClick={fn}>✓ Done</Button>
+  const btn = 'w-full justify-start text-left'
 
   return (
     <div className="space-y-3">
+      <Card className="p-3 sm:p-4">
+        <ol className="divide-y divide-stone-100">
+          <Option n={1}>
+            <Button tone="plain" className={btn} disabled={!customers} onClick={() => save(`easyecom-new-customers-${day}.csv`, toCsv(newCustomerRows(waiting)))}>⬇ New customers → Easy Ecom ({customers})</Button>
+          </Option>
+          <Option n={2}>
+            <label className={`flex min-h-12 w-full cursor-pointer items-center rounded-lg border border-stone-300 bg-white px-5 font-semibold text-stone-800 hover:bg-ae-cream/50 ${busy ? 'opacity-50' : ''}`}>
+              ⬆ Customers from Easy Ecom → Hub
+              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) readMaster(f) }} />
+            </label>
+          </Option>
+          <Option n={3} done={doneBtn(productsReady, () => run(() => supabase.rpc('mark_in_easy_ecom', { p_skus: products.map((p) => p.sku), p_step: 'products' }), () => 'New products are in Easy Ecom.'))}>
+            <Button tone="plain" className={btn} disabled={!productsReady} onClick={() => save(`easyecom-new-products-${day}.csv`, toCsv(productRows(products)))}>⬇ New products → Easy Ecom ({products.length})</Button>
+          </Option>
+          <Option n={4} done={doneBtn(combos.length > 0, () => run(() => supabase.rpc('mark_in_easy_ecom', { p_skus: combos.map((p) => p.sku), p_step: 'combos' }), () => 'New virtual combos are in Easy Ecom.'))}>
+            <Button tone="plain" className={btn} disabled={!combos.length} onClick={() => save(`easyecom-virtual-combos-${day}.csv`, toCsv(comboRows(combos)))}>⬇ New virtual combos → Easy Ecom ({combos.length})</Button>
+          </Option>
+          <Option n={5}>
+            <Button className={btn} disabled={!total || ready < total} onClick={onOrders}>⬇ Final upload ({total})</Button>
+          </Option>
+          <Option n={6}>
+            <Button tone="plain" className={btn} disabled={!ready} onClick={onOrders}>⬇ Ready orders only ({ready})</Button>
+          </Option>
+        </ol>
+      </Card>
+
       <OkBox>{msg}</OkBox>
       <ErrorBox>{error}</ErrorBox>
 
-      {custNames.length > 0 && (
-        <Card className="space-y-2">
-          <h3 className="font-semibold text-ae-blue">1 · New customers ({custNames.length})</h3>
-          <p className="text-sm text-stone-600">{custNames.join(' · ')}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button tone="plain" disabled={!customers} onClick={() => save(`easyecom-new-customers-${day}.csv`, toCsv(newCustomerRows(waiting)))}>⬇ Customer file</Button>
-            <label className={`inline-flex min-h-12 cursor-pointer items-center rounded-lg border border-stone-300 bg-white px-5 font-semibold text-stone-800 ${busy ? 'opacity-50' : ''}`}>
-              ⬆ Customer Master
-              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) readMaster(f) }} />
-            </label>
-          </div>
-        </Card>
-      )}
-
       {rows.length > 0 && (
         <Card className="space-y-3">
-          <h3 className="font-semibold text-ae-blue">2 · New products ({rows.length})</h3>
+          <h3 className="font-semibold text-ae-blue">New products</h3>
           <ul className="space-y-3">
             {rows.map((p) => {
               const e = edit[p.sku]
@@ -145,17 +164,6 @@ export default function EeSetup({ orders, eeSkus, day, save, onChange }: {
               )
             })}
           </ul>
-          <div className="flex flex-wrap gap-2 border-t border-stone-100 pt-3">
-            {toCreate.length > 0 && <>
-              <Button tone="plain" disabled={!ready} onClick={() => save(`easyecom-new-products-${day}.csv`, toCsv(productRows(toCreate)))}>⬇ Product file ({toCreate.length})</Button>
-              <Button disabled={!ready || busy} onClick={() => run(() => supabase.rpc('mark_in_easy_ecom', { p_skus: toCreate.map((p) => p.sku), p_step: 'products' }), () => 'Products marked as created in Easy Ecom.')}>✓ Products created</Button>
-            </>}
-            {combosLeft.length > 0 && <>
-              <Button tone="plain" onClick={() => save(`easyecom-virtual-combos-${day}.csv`, toCsv(comboRows(combosLeft)))}>⬇ Virtual combo file ({combosLeft.length})</Button>
-              <Button disabled={busy} onClick={() => run(() => supabase.rpc('mark_in_easy_ecom', { p_skus: combosLeft.map((p) => p.sku), p_step: 'combos' }), () => 'Combos marked as created in Easy Ecom.')}>✓ Combos created</Button>
-            </>}
-          </div>
-          {toCreate.length > 0 && !ready && <p className="text-xs text-stone-500">Fill ✱ and Save each product first.</p>}
         </Card>
       )}
     </div>

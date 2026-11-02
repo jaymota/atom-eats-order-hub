@@ -15,7 +15,7 @@ const LINKS: L[] = [
   { to: '/dispatch', label: 'Dispatch', count: 'dispatch' },
   { to: '/orders', label: 'Orders', end: true },
   { to: '/invoices', label: 'All invoices' },
-  { to: '/downloads', label: 'Downloads' },
+  { to: '/downloads', label: 'Easy Ecom Sync' },
   { to: '/products', label: 'Products' },
   { to: '/customers', label: 'Customers' },
   { to: '/checks', label: 'Checks' },

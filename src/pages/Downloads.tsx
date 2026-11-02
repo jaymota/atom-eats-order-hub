@@ -1,4 +1,4 @@
-// Downloads: the evening Easy Ecom upload as six fixed options (components/EeSetup), the orders
+// Easy Ecom Sync (the /downloads page): the evening Easy Ecom upload as six fixed options (components/EeSetup), the orders
 // they cover, and other files (master list, offline import, per-order item files).
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -106,7 +106,7 @@ export default function Downloads() {
 
   return (
     <div className="space-y-3 pb-24">
-      <h2 className="text-xl font-bold text-ae-blue">Downloads</h2>
+      <h2 className="text-xl font-bold text-ae-blue">Easy Ecom Sync</h2>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Select value={show} onChange={(e) => setShow(e.target.value)} aria-label="Show">
           <option value="waiting">Not in Easy Ecom</option><option value="done">Uploaded</option><option value="all">All</option>

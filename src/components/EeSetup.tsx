@@ -1,4 +1,4 @@
-// Downloads: the day's Easy Ecom work as six fixed options, always in the same place.
+// Easy Ecom Sync: the day's Easy Ecom work as six fixed options, always in the same place.
 // 1 new customers → Easy Ecom, 2 their codes back from Easy Ecom's Customer Master, 3 new products,
 // 4 new virtual combos, 5 the final order upload (only when 1–4 left nothing behind), 6 only the orders
 // that are ready. Below: the details new products need (cost, size, and for a combo what's inside).

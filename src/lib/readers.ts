@@ -22,10 +22,17 @@ export async function readImage(file: Blob, onProgress?: Progress): Promise<{ te
   }
 }
 
+/** pdf.js, the "legacy" build: the normal one needs very new browsers (e.g. Uint8Array.toHex) and
+ *  fails on older phones and laptops with "a.toHex is not a function". */
+async function loadPdfjs() {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString()
+  return pdfjs
+}
+
 /** Reads the text of a PDF, line by line (top to bottom on each page). */
 export async function readPdf(file: Blob, onProgress?: Progress): Promise<string> {
-  const pdfjs = await import('pdfjs-dist')
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+  const pdfjs = await loadPdfjs()
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
   const out: string[] = []
   for (let p = 1; p <= doc.numPages; p++) {
@@ -108,8 +115,7 @@ export async function compressImage(file: File, maxSide = 1600, quality = 0.72):
 
 /** A scanned PDF (no text inside): draws each page as a picture and reads it. */
 export async function readScannedPdf(file: Blob, onProgress?: Progress): Promise<string> {
-  const pdfjs = await import('pdfjs-dist')
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+  const pdfjs = await loadPdfjs()
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
   const texts: string[] = []
   for (let p = 1; p <= Math.min(doc.numPages, 5); p++) {

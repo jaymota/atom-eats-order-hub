@@ -26,7 +26,8 @@ Deno.serve(async (req) => {
   try { m = await req.json() } catch { return json(req, { error: 'Bad email' }, 400) }
   // The script says "I checked" at the end of every run, even when nothing new came in.
   if (m.ping) {
-    await adminDb().from('inbox_status').update({ last_check_at: new Date().toISOString(), last_found: Number(m.found) || 0 }).eq('id', 1)
+    // 'started' only moves the time; 'finished' also records how many emails came in.
+    await adminDb().from('inbox_status').update({ last_check_at: new Date().toISOString(), ...(m.note === 'started' ? {} : { last_found: Number(m.found) || 0 }) }).eq('id', 1)
     return json(req, { ok: true })
   }
   const gmailId = String(m.id ?? '')

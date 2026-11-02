@@ -13,7 +13,13 @@ const TEAM = /@(atomconsulting\.in|atomeats\.com)$/i
 const LOOKS_LIKE_PO = /(^|[^a-z])(p\.?\s?o\.?|purchase\s*order|grn|indent)([^a-z]|$)/i
 const FILE_OK = /\.(pdf|xlsx?|csv|png|jpe?g|webp)$/i
 
+function ping(found, note) {
+  UrlFetchApp.fetch(HUB_URL, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { 'x-hub-key': HUB_KEY },
+    payload: JSON.stringify({ ping: true, found, note }) })
+}
+
 function sendNewEmails() {
+  ping(0, 'started') // tells the Hub the timer fired, even if something below fails
   let found = 0
   const props = PropertiesService.getScriptProperties()
   const sent = JSON.parse(props.getProperty('sent') || '[]')
@@ -33,6 +39,7 @@ function sendNewEmails() {
         console.log('Skipped (not a PO): ' + m.getSubject() + ' from ' + email)
         continue
       }
+      try {
       const res = UrlFetchApp.fetch(HUB_URL, {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { 'x-hub-key': HUB_KEY },
         payload: JSON.stringify({
@@ -43,16 +50,25 @@ function sendNewEmails() {
       })
       if (res.getResponseCode() === 200) { sent.push(id); found++; console.log('Sent to the Hub: ' + m.getSubject()) }
       else console.log('Hub said ' + res.getResponseCode() + ' for "' + m.getSubject() + '": ' + res.getContentText())
+      } catch (e) { console.log('Could not send "' + m.getSubject() + '": ' + e) } // one bad email never stops the rest
     }
   }
   props.setProperty('sent', JSON.stringify(sent.slice(-500)))
-  // Tell the Hub this check ran (shown on "To confirm"), even when there was nothing new.
-  UrlFetchApp.fetch(HUB_URL, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { 'x-hub-key': HUB_KEY }, payload: JSON.stringify({ ping: true, found }) })
+  // Tell the Hub this check finished (shown on "To confirm"), even when there was nothing new.
+  ping(found, 'finished')
 }
 
 // Run this once: it checks every 15 minutes from then on.
 function setUp() {
   for (const t of ScriptApp.getProjectTriggers()) ScriptApp.deleteTrigger(t)
   ScriptApp.newTrigger('sendNewEmails').timeBased().everyMinutes(15).create()
+  showTimers()
   sendNewEmails()
+}
+
+// Lists this script's timers in the log: there should be exactly one, "sendNewEmails every 15 minutes".
+function showTimers() {
+  const ts = ScriptApp.getProjectTriggers()
+  console.log('Timers: ' + ts.length + ' · running as ' + Session.getEffectiveUser().getEmail())
+  for (const t of ts) console.log('  ' + t.getHandlerFunction() + ' · ' + t.getEventType())
 }

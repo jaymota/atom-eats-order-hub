@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { needs } from '../src/lib/needs'
+import { needs, shopifyNeedOrders } from '../src/lib/needs'
 
 const combo = [
   { combo_sku: 'SPK03', component_sku: 'SPK01', qty: 3 },
@@ -24,5 +24,18 @@ describe('needs', () => {
       o('cancelled', null, [['TPC01', 50]]),
     ], combo, '2026-11-03')
     expect(r).toEqual([{ sku: 'TPC01', open: 0, sent7: 4, sent30: 5 }])
+  })
+})
+
+describe('shopifyNeedOrders', () => {
+  it('splits part-shipped online orders and skips cancelled ones', () => {
+    const rows = shopifyNeedOrders([
+      { cancelled: false, order_date: '2026-11-01', sent_on: '2026-11-02', lines: [{ sku: 'SPK03', qty: 2, open: 1 }, { sku: 'TPC01', qty: 1, open: 0 }] },
+      { cancelled: true, order_date: '2026-11-01', sent_on: null, lines: [{ sku: 'TPC01', qty: 9, open: 9 }] },
+    ])
+    expect(needs(rows, combo, '2026-11-03')).toEqual([
+      { sku: 'SPK01', open: 3, sent7: 3, sent30: 3 },
+      { sku: 'TPC01', open: 0, sent7: 1, sent30: 1 },
+    ])
   })
 })

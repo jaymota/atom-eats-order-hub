@@ -15,6 +15,7 @@ import Layout from './pages/Layout'
 import Login from './pages/Login'
 import Needs from './pages/Needs'
 import NewOrder from './pages/NewOrder'
+import OnlineOrders from './pages/OnlineOrders'
 import OrderPage from './pages/OrderPage'
 import Orders from './pages/Orders'
 import Products from './pages/Products'
@@ -48,6 +49,7 @@ function Gate() {
           <Route path="plan" element={<Only path="/plan"><PlanPage /></Only>} />
           <Route path="invoice" element={<Only path="/invoice"><InvoicePage /></Only>} />
           <Route path="dispatch" element={<Only path="/dispatch"><DispatchPage /></Only>} />
+          <Route path="online" element={<Only path="/online"><OnlineOrders /></Only>} />
           <Route path="invoices" element={<Only path="/invoices"><Invoices /></Only>} />
           <Route path="downloads" element={<Only path="/downloads"><Downloads /></Only>} />
           <Route path="needs" element={<Only path="/needs"><Needs /></Only>} />

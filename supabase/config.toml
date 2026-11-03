@@ -428,3 +428,6 @@ verify_jwt = false
 
 [functions.inbox]
 verify_jwt = false
+
+[functions.shopify-sync]
+verify_jwt = false

@@ -1,0 +1,21 @@
+# Every 15 minutes, copies new and changed atomeats.com orders from Shopify into the Hub (view-only).
+name: Copy Shopify orders
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy orders
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          out=$(curl -sS --max-time 90 -X POST "$SUPABASE_URL/functions/v1/shopify-sync" \
+            -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json" -d '{}')
+          echo "$out"
+          echo "$out" | grep -q '"ok":true\|not linked yet\|a moment ago'

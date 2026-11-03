@@ -18,7 +18,7 @@ interface Mail {
 interface OrderRef { id: string; order_no: string; po_number: string | null; customer_name: string; stage: string }
 interface Grn { po_number: string; source: string | null; grn_on: string; qty_po: number; qty_grn: number; amount: number; lines: { item: string; qty_po: number; qty_grn: number }[] }
 interface Sender { id: number; match: string; source: string; active: boolean }
-interface SalesOrder { id: string; order_no: string; customer_name: string; received_at: string; salesperson: { name: string } | null; order_lines: { product_name: string | null; qty: number }[] }
+interface SalesOrder { id: string; order_no: string; customer_name: string; received_at: string; billing_city: string | null; gstin: string | null; margin_pct: number | null; notes: string | null; channel: string; salesperson: { name: string } | null; order_lines: { product_name: string | null; qty: number }[] }
 
 const SOURCE: Record<string, string> = { blinkit: 'Blinkit', foodstories: 'Foodstories', foodsquare: 'Food Square', forwarded: 'Forwarded' }
 const TABS = [['sales', 'Sales'], ['po', 'POs'], ['grn', 'GRN'], ['other', 'Other'], ['done', 'Done']] as const
@@ -48,7 +48,7 @@ export default function Inbox() {
         .order('received_at', { ascending: false }).limit(300),
       supabase.from('orders').select('id, order_no, po_number, customer_name, stage').not('po_number', 'is', null).order('created_at', { ascending: false }).limit(1000),
       supabase.from('inbox_senders').select('*').order('source'),
-      supabase.from('orders').select('id, order_no, customer_name, received_at, salesperson:people!orders_salesperson_id_fkey(name), order_lines(product_name, qty)').eq('stage', 'sales_order').order('received_at'),
+      supabase.from('orders').select('id, order_no, customer_name, received_at, billing_city, gstin, margin_pct, notes, channel, salesperson:people!orders_salesperson_id_fkey(name), order_lines(product_name, qty)').eq('stage', 'sales_order').order('received_at'),
       supabase.from('inbox_status').select('last_check_at').maybeSingle(),
       supabase.from('grns').select('po_number, source, grn_on, qty_po, qty_grn, amount, lines').order('grn_on', { ascending: false }).limit(1000),
     ])
@@ -131,6 +131,11 @@ export default function Inbox() {
                   </div>
                   <div className="text-xs text-stone-500">{s.order_no}{s.salesperson && ` · by ${s.salesperson.name}`}</div>
                   <div className="text-sm text-stone-700">{itemsShort(s.order_lines)}</div>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm sm:grid-cols-4">
+                    {([['Area', s.billing_city], ['GSTIN', s.gstin ?? 'none'], ['Margin', s.channel === 'FOC' ? 'FOC' : s.margin_pct != null ? `${s.margin_pct}%` : null], [s.notes && !s.notes.startsWith('Samples: ') ? 'Note' : 'Samples', s.notes?.replace(/^Samples: /, '') ?? 'none']] as [string, string | null][]).map(([k, v]) => (
+                      <div key={k}><dt className="text-xs text-stone-500">{k}</dt><dd className={v ? 'text-stone-800' : 'text-amber-700'}>{v ?? 'missing'}</dd></div>
+                    ))}
+                  </dl>
                   <div className="pt-1">
                     {can.plan(me?.role)
                       ? <Button onClick={() => navigate(`/orders/${s.id}`, { state: { complete: true } })}>Complete</Button>

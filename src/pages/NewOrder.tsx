@@ -129,7 +129,7 @@ function InputStep({ onRead, onGt, foc, setFoc, locked }: { onRead: OnRead; onGt
           ['💬', 'WhatsApp', 'Paste the order message', () => setMode('paste')],
           ['📄', 'PO', 'Upload the PO (PDF or Excel)', () => poRef.current?.click()],
           ['📷', 'Photo', 'Screenshot or photo of the order', () => imgRef.current?.click()],
-          ['📝', 'GT form', 'Party + products, for field sales', onGt],
+          ['📝', 'GT form', 'Store, products, margin', onGt],
         ] as [string, string, string, () => void][]).map(([icon, label, hint, go]) => (
           <button key={label} type="button" onClick={go}
             className="flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border-2 border-ae-blue/20 bg-white text-xl font-bold text-ae-blue shadow-sm active:bg-ae-blue/5 sm:aspect-[4/3]">

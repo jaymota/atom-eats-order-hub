@@ -17,7 +17,7 @@ interface Person {
   last_login_at: string | null
 }
 
-const ROLE_ORDER: Role[] = ['super_admin', 'admin', 'manager', 'accounts', 'ops', 'sales']
+const ROLE_ORDER: Role[] = ['super_admin', 'admin', 'manager', 'accounts', 'ops', 'sales', 'marketing']
 
 function suggestUsername(name: string) {
   return (name.trim().split(/\s+/)[0] ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9.]/g, '')

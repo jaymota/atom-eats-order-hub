@@ -100,7 +100,7 @@ export default function OrderPage() {
     if (o.stage === 'planned' && !isAdmin(me?.role) && !confirm('Editing sends it back to New, to plan again. OK?')) return
     setEdit(await loadDraft(o.id))
   }
-  const back = me?.role === 'sales' ? ['/orders/new', '← New order'] : me?.role === 'accounts' ? ['/invoices', '← All invoices'] : ['/orders', '← All orders']
+  const back = me?.role === 'sales' || me?.role === 'marketing' ? ['/orders/new', '← New order'] : me?.role === 'accounts' ? ['/invoices', '← All invoices'] : ['/orders', '← All orders']
   const canHold = ['super_admin', 'admin', 'manager', 'ops'].includes(me?.role ?? '')
   const deliverTo = o.same_as_billing
     ? [o.customer_name, o.billing_address, o.billing_city, o.billing_state, o.billing_pin]

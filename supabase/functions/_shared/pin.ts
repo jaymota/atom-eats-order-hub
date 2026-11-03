@@ -41,5 +41,5 @@ export function normaliseUsername(u: unknown): string {
   return typeof u === 'string' ? u.trim().toLowerCase() : ''
 }
 
-export const ROLES = ['super_admin', 'admin', 'manager', 'accounts', 'ops', 'sales'] as const
+export const ROLES = ['super_admin', 'admin', 'manager', 'accounts', 'ops', 'sales', 'marketing'] as const
 export type Role = (typeof ROLES)[number]

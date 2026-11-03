@@ -8,6 +8,7 @@ import {
   BASIS_LABEL, applyCustomer, applyFoc, COURIERS, PAYMENT_TYPES, PO_CHANNELS, draftTotal, findRepeat, lineRate, mustHave, newKey, saveDraft, stateFromGstin, stillMissing,
   type Draft, type DraftLine, type PriceBasis,
 } from '../lib/orders'
+import { useAuth } from '../lib/auth'
 import { rupees } from '../lib/stages'
 import { supabase } from '../lib/supabase'
 import { CHANNELS, CHANNEL_HINT } from '../lib/channels'
@@ -21,6 +22,7 @@ const TERMS = ['advance', 'credit', 'COD', 'FOC']
 
 export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draft: Draft; setDraft: (d: Draft) => void; onBack?: () => void; onSaved?: (orderNo: string) => void }) {
   const { catalog } = useCatalog()
+  const { me } = useAuth()
   const navigate = useNavigate()
   const [people, setPeople] = useState<{ id: string; name: string }[]>([])
   const [adding, setAdding] = useState<false | 'pick' | 'new'>(false)
@@ -109,7 +111,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
         {sectionTitle('Order')}
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Channel ✱">
-            <Select value={d.channel} onChange={(e) => setDraft(e.target.value === 'FOC' ? applyFoc(d) : { ...d, channel: e.target.value })}>
+            <Select value={d.channel} disabled={me?.role === 'marketing'} onChange={(e) => setDraft(e.target.value === 'FOC' ? applyFoc(d) : { ...d, channel: e.target.value })}>
               <option value="">Choose…</option>
               {CHANNELS.map((c) => <option key={c} value={c}>{c} ({CHANNEL_HINT[c]})</option>)}
             </Select>

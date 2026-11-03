@@ -1,9 +1,10 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Logo } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { ROLE_NAMES } from '../lib/format'
 import { useTodoCounts, type TodoCounts } from '../lib/todo'
-import { mayOpen } from '../lib/access'
+import { SHORT_MENU, mayOpen } from '../lib/access'
 
 type L = { to: string; label: string; end?: boolean; count?: keyof TodoCounts }
 const LINKS: L[] = [
@@ -29,6 +30,12 @@ const LINKS: L[] = [
 export default function Layout() {
   const { me, signOut } = useAuth()
   const counts = useTodoCounts()
+  const { pathname } = useLocation()
+  const [more, setMore] = useState(false)
+  const links = LINKS.filter((l) => mayOpen(l.to, me?.role))
+  // A short menu (accounts): its own pages first; the rest, or the page you're on, appear after More.
+  const short = me ? SHORT_MENU[me.role] : undefined
+  const shown = short && !more ? links.filter((l) => short.includes(l.to) || l.to === pathname) : links
   return (
     <div className="min-h-screen bg-ae-cream">
       <header className="border-b border-ae-blue/15 bg-ae-cream">
@@ -45,7 +52,7 @@ export default function Layout() {
           </button>
         </div>
         <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-2">
-          {LINKS.filter((l) => mayOpen(l.to, me?.role)).map((l) => (
+          {shown.map((l) => (
             <NavLink
               key={l.to}
               to={l.to}
@@ -58,6 +65,7 @@ export default function Layout() {
               {l.count && counts && counts[l.count] > 0 && <span className="ml-1.5 rounded-full bg-ae-blue px-1.5 py-0.5 text-xs text-ae-cream">{counts[l.count]}</span>}
             </NavLink>
           ))}
+          {short && <button type="button" onClick={() => setMore(!more)} className="whitespace-nowrap border-b-2 border-transparent px-3 py-3 text-sm font-semibold text-stone-500 hover:text-stone-900">{more ? 'Less' : 'More ▾'}</button>}
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">

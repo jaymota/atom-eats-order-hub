@@ -1,4 +1,4 @@
-export type Role = 'super_admin' | 'admin' | 'manager' | 'accounts' | 'ops' | 'sales'
+export type Role = 'super_admin' | 'admin' | 'manager' | 'accounts' | 'ops' | 'sales' | 'marketing'
 
 export const ROLE_NAMES: Record<Role, string> = {
   super_admin: 'Super admin',
@@ -7,15 +7,17 @@ export const ROLE_NAMES: Record<Role, string> = {
   accounts: 'Accounts',
   ops: 'Ops / dispatch',
   sales: 'Sales',
+  marketing: 'FOC only',
 }
 
 export const ROLE_HELP: Record<Role, string> = {
   super_admin: 'Everything, including managing admins and settings.',
   admin: 'Everything except managing other admins.',
-  manager: 'Sees and does everything except the team, PINs and merging customers.',
+  manager: 'Does everything except the team, PINs and merging customers. Short menu: invoices first, the rest under More.',
   accounts: 'Records invoices.',
   ops: 'Plans dispatch, marks orders dispatched, adds tracking. Can also enter orders.',
-  sales: 'Enters orders and sees all orders. Can’t move orders between stages.',
+  sales: 'Enters orders and sees only their own. Can’t move orders between stages.',
+  marketing: 'Places FOC orders only, and sees only their own.',
 }
 
 /** Admin work: products, prices, checks, editing any order. Managers included. */

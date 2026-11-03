@@ -55,7 +55,7 @@ type PoItem = RawItem & { ean?: string; rate?: number; basic?: number }
 
 type OnRead = (text: string, files: File[], source: string, sheetItems?: PoItem[], po?: PoRead | null) => void
 
-function InputStep({ onRead, onGt, foc, setFoc }: { onRead: OnRead; onGt: () => void; foc: boolean; setFoc: (v: boolean) => void }) {
+function InputStep({ onRead, onGt, foc, setFoc, locked }: { onRead: OnRead; onGt: () => void; foc: boolean; setFoc: (v: boolean) => void; locked?: boolean }) {
   const [mode, setMode] = useState<'pick' | 'paste'>('pick')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState('')
@@ -119,7 +119,7 @@ function InputStep({ onRead, onGt, foc, setFoc }: { onRead: OnRead; onGt: () => 
     <div className="space-y-3">
       <ErrorBox>{error}</ErrorBox>
       {/* FOC once, here: channel, payment and prices become FOC on their own; no GST or invoice needed. */}
-      <button type="button" onClick={() => setFoc(!foc)}
+      <button type="button" disabled={locked} onClick={() => setFoc(!foc)}
         className={`flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3 text-left font-bold ${foc ? 'border-ae-pink bg-ae-pink text-ae-blue' : 'border-stone-200 bg-white text-stone-600'}`}>
         <span>🎁 FOC order <span className="block text-xs font-normal">Free samples · no invoice</span></span>
         <span className={`h-7 w-12 rounded-full p-1 transition-colors ${foc ? 'bg-ae-blue' : 'bg-stone-300'}`}><span className={`block h-5 w-5 rounded-full bg-white transition-transform ${foc ? 'translate-x-5' : ''}`} /></span>
@@ -398,7 +398,9 @@ export default function NewOrder() {
   const [at, setAt] = useState(0)
   const [asked, setAsked] = useState(0)
   const [info, setInfo] = useState('')
-  const [foc, setFoc] = useState(false) // free samples: set once here, filled in everywhere
+  const [focPick, setFoc] = useState(false) // free samples: set once here, filled in everywhere
+  const focOnly = me?.role === 'marketing' // the FOC-only login can't switch it off
+  const foc = focPick || focOnly
 
   // Opened from "To confirm": read that email's attachments straight away.
   const loc = useLocation() as { state?: { inboxId?: string } }
@@ -559,7 +561,7 @@ export default function NewOrder() {
     return (
       <div className="mx-auto max-w-xl space-y-4">
         <h2 className="text-xl font-bold text-ae-blue">New order</h2>
-        <InputStep onRead={start} onGt={() => setStep('gt')} foc={foc} setFoc={setFoc} />
+        <InputStep onRead={start} onGt={() => setStep('gt')} foc={foc} setFoc={setFoc} locked={focOnly} />
       </div>
     )
   }

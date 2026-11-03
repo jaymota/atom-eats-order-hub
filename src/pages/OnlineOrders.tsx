@@ -80,8 +80,8 @@ export default function OnlineOrders() {
                 <ul className="text-sm text-stone-800">
                   {r.lines.map((l, i) => (
                     <li key={i}>
-                      {l.qty}× {l.title} <span className="font-mono text-xs text-stone-500">{l.sku || 'No SKU'}</span>
-                      {!known.has(l.sku) && <> <Badge tone="amber">Unknown product</Badge></>}
+                      {l.qty}× {l.title} <span className="font-mono text-xs text-stone-500">{l.sku}</span>
+                      {l.sku && !known.has(l.sku) && <> <Badge tone="amber">Unknown product</Badge></>}
                       {l.open > 0 && l.open < l.qty && <span className="text-xs text-stone-500"> · {l.open} to ship</span>}
                     </li>
                   ))}

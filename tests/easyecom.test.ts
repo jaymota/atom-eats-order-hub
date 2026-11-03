@@ -61,6 +61,7 @@ describe('Easy Ecom files', () => {
   it('flags SKUs Easy Ecom does not have', () => {
     expect(problems(o(), new Set(['TPC01']))).toEqual([])
     expect(problems(o(), new Set())).toEqual(['Not in Easy Ecom: TPC01'])
-    expect(problems(o({ customer: null }), new Set(['TPC01']))).toEqual(['No Easy Ecom customer code'])
+    expect(problems(o({ customer: null }), new Set(['TPC01']))).toEqual([]) // no Easy Ecom customer code needed
+    expect(problems(o({ stage: 'invoiced' }), new Set(['TPC01']))).toEqual(['Not dispatched yet'])
   })
 })

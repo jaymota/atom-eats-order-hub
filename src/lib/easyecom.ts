@@ -42,14 +42,16 @@ export const referenceFor = (o: EeOrder) => (o.invoice_no ? `B2B/${o.invoice_no}
 
 const price = (n: number | null | undefined) => (n == null ? '' : Number(n).toFixed(2))
 
-// ---------- What would make Easy Ecom reject an order ----------
+// ---------- What would stop an order going in the evening upload ----------
+// Orders go to Easy Ecom as Shipped retail orders (Importing Wizard): stock comes off at once, no customer
+// code is needed (the name, address and GSTIN go in the file), and only orders that have left count.
 export function problems(o: EeOrder, eeSkus: Set<string>): string[] {
   const p: string[] = []
+  if (!['dispatched', 'delivered'].includes(o.stage)) p.push('Not dispatched yet')
   const bad = o.order_lines.filter((l) => !eeSkus.has(l.sku)).map((l) => l.sku)
   if (bad.length) p.push(`Not in Easy Ecom: ${bad.join(', ')}`)
   if (!o.invoice_no && o.channel !== 'FOC') p.push('No invoice') // FOC samples have no invoice
   if (!shipTo(o).pin) p.push('No PIN')
-  if (!o.customer?.ee_customer_code) p.push('No Easy Ecom customer code')
   return p
 }
 
@@ -68,7 +70,7 @@ export function wholesaleRows(orders: EeOrder[]): unknown[][] {
   return rows
 }
 
-// ---------- 2. Offline order import (Orders → Importing Wizard → EasyEcom format) ----------
+// ---------- 2. The evening upload: Orders → Importing Wizard → Format EasyEcom → Import Order As "Shipped" ----------
 export const OFFLINE_HEAD = ['Channel Name*', 'Sale Order Item Code*', 'Display Order Code*', 'Total Price*', 'Shipping Charges', 'Gift Wrap Charges', 'Total Discount',
   'Packet Number*', 'Date("YYYY-MM-DD")*', 'Item SKU Code*', 'Market Shipped*', 'Shipping provider', 'Shipping Address Name', 'Shipping Address Phone', 'Email',
   'Shipping Address Line 1', 'Shipping Address Line 2', 'Shipping Address City', 'Shipping Address State', 'Shipping Address Country', 'Shipping Address Pincode*',

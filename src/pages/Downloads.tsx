@@ -1,12 +1,12 @@
-// Easy Ecom Sync (the /downloads page): the evening Easy Ecom upload as six fixed options (components/EeSetup), the orders
-// they cover, and other files (master list, offline import, per-order item files).
+// Easy Ecom Sync (the /downloads page): the evening Easy Ecom upload as four fixed options (components/EeSetup) and the
+// dispatched orders they cover. Orders go in as Shipped retail orders, so Easy Ecom takes the stock off at once.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import EeSetup from '../components/EeSetup'
 import { Badge, Button, Card, ErrorBox, Input, OkBox, Select } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { fetchAll } from '../lib/catalog'
-import { masterRows, offlineRows, problems, itemRows, toCsv, wholesaleRows, type EeOrder } from '../lib/easyecom'
+import { masterRows, offlineRows, problems, toCsv, type EeOrder } from '../lib/easyecom'
 import { rupees, todayIST } from '../lib/stages'
 import { supabase } from '../lib/supabase'
 import { StageBadge } from './Orders'
@@ -33,11 +33,9 @@ export default function Downloads() {
   const [eeSkus, setEeSkus] = useState<Set<string>>(new Set())
   const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [show, setShow] = useState('waiting')
-  const [stages, setStages] = useState('sent')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [picked, setPicked] = useState<Set<string>>(new Set())
-  const [codes, setCodes] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -59,30 +57,17 @@ export default function Downloads() {
   const list = useMemo(() => (orders ?? []).filter((o) => {
     if (show === 'waiting' && o.ee_uploaded_at) return false
     if (show === 'done' && !o.ee_uploaded_at) return false
-    if (stages === 'sent' && !['dispatched', 'delivered'].includes(o.stage)) return false
+    if (!['dispatched', 'delivered'].includes(o.stage)) return false
     const d = o.dispatch_date ?? o.invoice_date ?? o.order_date
     if (from && d < from) return false
     if (to && d > to) return false
     return true
-  }), [orders, show, stages, from, to])
+  }), [orders, show, from, to])
   const ok = useMemo(() => list.filter((o) => !problems(o, eeSkus).length), [list, eeSkus])
   // Tick everything that is fine whenever the list changes.
   useEffect(() => { setPicked(new Set(ok.filter((o) => !o.ee_uploaded_at).map((o) => o.id))) }, [ok])
   const chosen = list.filter((o) => picked.has(o.id))
   const day = todayIST()
-
-  const saveCode = async (o: EeOrder) => {
-    setError('')
-    const { error: e } = await supabase.rpc('set_ee_customer_code', { p_customer: o.customer_id, p_code: codes[o.customer_id!] ?? '' })
-    if (e) setError(e.message)
-    else { setMsg(`Easy Ecom code saved for ${o.customer_name}.`); load() }
-  }
-
-  const zip = async () => {
-    const { zipSync, strToU8 } = await import('fflate')
-    const files = Object.fromEntries(chosen.map((o) => [`${o.order_no} ${o.customer_name.replace(/[^\w -]+/g, '').slice(0, 40)}.csv`, strToU8(toCsv(itemRows(o)))]))
-    save(`easyecom-item-files-${day}.zip`, zipSync(files) as BlobPart, 'application/zip')
-  }
 
   const master = async () => {
     const X = await import('xlsx')
@@ -107,12 +92,9 @@ export default function Downloads() {
   return (
     <div className="space-y-3 pb-24">
       <h2 className="text-xl font-bold text-ae-blue">Easy Ecom Sync</h2>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2">
         <Select value={show} onChange={(e) => setShow(e.target.value)} aria-label="Show">
           <option value="waiting">Not in Easy Ecom</option><option value="done">Uploaded</option><option value="all">All</option>
-        </Select>
-        <Select value={stages} onChange={(e) => setStages(e.target.value)} aria-label="Stage">
-          <option value="sent">Dispatched</option><option value="invoiced">Invoiced or later</option>
         </Select>
         <Input type="date" className="min-w-0" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
         <Input type="date" className="min-w-0" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" />
@@ -121,14 +103,12 @@ export default function Downloads() {
       {orders && (
         <EeSetup orders={list} eeSkus={eeSkus} day={day} save={(n, d) => save(n, d, 'text/csv;charset=utf-8')} onChange={load}
           ready={chosen.filter((o) => !o.ee_uploaded_at).length} total={list.filter((o) => !o.ee_uploaded_at).length}
-          onOrders={() => csv(`easyecom-wholesale-${day}.csv`, wholesaleRows(chosen.filter((o) => !o.ee_uploaded_at)))} />
+          onOrders={() => csv(`easyecom-shipped-orders-${day}.csv`, offlineRows(chosen.filter((o) => !o.ee_uploaded_at)))} />
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-600">
         <span><b className="text-stone-900">{chosen.length}</b> ticked · {units} units · {rupees(chosen.reduce((s, o) => s + Number(o.invoice_value ?? o.estimate_value), 0))}</span>
         <button type="button" className="underline disabled:opacity-40" disabled={!chosen.length} onClick={master}>Master list</button>
-        <button type="button" className="underline disabled:opacity-40" disabled={!chosen.length} onClick={() => csv(`easyecom-offline-import-${day}.csv`, offlineRows(chosen))}>Offline import</button>
-        <button type="button" className="underline disabled:opacity-40" disabled={!chosen.length} onClick={zip}>Item files</button>
       </div>
 
       <OkBox>{msg}</OkBox>
@@ -150,15 +130,8 @@ export default function Downloads() {
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
                       {o.order_no} · {o.invoice_no} · {o.dispatch_date ?? 'not sent'} <StageBadge stage={o.stage as never} />
                       {o.ee_uploaded_at && <Badge tone="green">In Easy Ecom</Badge>}
-                      {o.customer && !o.customer.in_easy_ecom && !o.customer.ee_customer_code && <Badge tone="amber">New customer</Badge>}
                     </div>
                     {p.map((x) => <div key={x} className="text-sm text-red-700">⚠ {x}{x.startsWith('Not in') && <> · <Link to="/products" className="underline">Products</Link></>}</div>)}
-                    {allowed && o.customer_id && !o.customer?.ee_customer_code && (
-                      <div className="flex gap-2 pt-1">
-                        <Input className="min-h-10 text-sm" placeholder="Easy Ecom customer code" value={codes[o.customer_id] ?? ''} onChange={(e) => setCodes({ ...codes, [o.customer_id!]: e.target.value })} />
-                        <Button tone="plain" className="min-h-10 px-3 text-sm" disabled={!codes[o.customer_id]?.trim()} onClick={() => saveCode(o)}>Save</Button>
-                      </div>
-                    )}
                   </div>
                 </Card>
               </li>

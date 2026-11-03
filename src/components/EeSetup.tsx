@@ -1,9 +1,9 @@
-// Easy Ecom Sync: the day's Easy Ecom work as six fixed options, always in the same place.
-// 1 new customers → Easy Ecom, 2 their codes back from Easy Ecom's Customer Master, 3 new products,
-// 4 new virtual combos, 5 the final order upload (only when 1–4 left nothing behind), 6 only the orders
-// that are ready. Below: the details new products need (cost, size, and for a combo what's inside).
+// Easy Ecom Sync: the day's Easy Ecom work as four fixed options, always in the same place.
+// 1 new products, 2 new virtual combos, 3 the final upload of dispatched orders as Shipped retail orders
+// (only when nothing is held back), 4 only the orders that are ready. Below: the details new products
+// need (cost, size, and for a combo what's inside).
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { comboRows, customerMasterCodes, newCustomerRows, productGaps, productRows, toCsv, type EeOrder, type NewProduct } from '../lib/easyecom'
+import { comboRows, productGaps, productRows, toCsv, type EeOrder, type NewProduct } from '../lib/easyecom'
 import { supabase } from '../lib/supabase'
 import { ProductPicker } from '../pages/Checks'
 import { Badge, Button, Card, ErrorBox, Input, OkBox } from './ui'
@@ -37,7 +37,6 @@ export default function EeSetup({ orders, eeSkus, day, save, onChange, ready, to
   const [busy, setBusy] = useState(false)
 
   const waiting = useMemo(() => orders.filter((o) => !o.ee_uploaded_at), [orders])
-  const customers = newCustomerRows(waiting).length - 1
   const skus = useMemo(() => [...new Set(waiting.flatMap((o) => o.order_lines.map((l) => l.sku)).filter((s) => !eeSkus.has(s)))].sort(), [waiting, eeSkus])
 
   const load = useCallback(async () => {
@@ -70,13 +69,6 @@ export default function EeSetup({ orders, eeSkus, day, save, onChange, ready, to
     const e = edit[p.sku]
     run(() => supabase.rpc('save_new_product', { p_sku: p.sku, p: { ...e, sku: e.sku || null } }), () => `Saved ${p.name}.`)
   }
-  const readMaster = async (f: File) => {
-    const X = await import('xlsx')
-    const wb = X.read(await f.arrayBuffer(), { type: 'array', raw: false })
-    const list = customerMasterCodes(X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }))
-    if (!list.length) { setError('That file has no Customer_Code column. Use Easy Ecom → Masters → Customer Master → export.'); return }
-    run(() => supabase.rpc('link_ee_customer_codes', { p_rows: list }), (n) => `${n} customer${n === 1 ? '' : 's'} linked to Easy Ecom.`)
-  }
   const setE = (sku: string, patch: Partial<Edit>) => setEdit({ ...edit, [sku]: { ...edit[sku], ...patch } })
   const doneBtn = (on: boolean, fn: () => void) => <Button tone="plain" className="min-h-10 shrink-0 px-3 text-sm" disabled={!on || busy} onClick={fn}>✓ Done</Button>
   const btn = 'w-full justify-start text-left'
@@ -85,25 +77,16 @@ export default function EeSetup({ orders, eeSkus, day, save, onChange, ready, to
     <div className="space-y-3">
       <Card className="p-3 sm:p-4">
         <ol className="divide-y divide-stone-100">
-          <Option n={1}>
-            <Button tone="plain" className={btn} disabled={!customers} onClick={() => save(`easyecom-new-customers-${day}.csv`, toCsv(newCustomerRows(waiting)))}>⬇ New customers → Easy Ecom ({customers})</Button>
-          </Option>
-          <Option n={2}>
-            <label className={`flex min-h-12 w-full cursor-pointer items-center rounded-lg border border-stone-300 bg-white px-5 font-semibold text-stone-800 hover:bg-ae-cream/50 ${busy ? 'opacity-50' : ''}`}>
-              ⬆ Customers from Easy Ecom → Hub
-              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) readMaster(f) }} />
-            </label>
-          </Option>
-          <Option n={3} done={doneBtn(productsReady, () => run(() => supabase.rpc('mark_in_easy_ecom', { p_skus: products.map((p) => p.sku), p_step: 'products' }), () => 'New products are in Easy Ecom.'))}>
+          <Option n={1} done={doneBtn(productsReady, () => run(() => supabase.rpc('mark_in_easy_ecom', { p_skus: products.map((p) => p.sku), p_step: 'products' }), () => 'New products are in Easy Ecom.'))}>
             <Button tone="plain" className={btn} disabled={!productsReady} onClick={() => save(`easyecom-new-products-${day}.csv`, toCsv(productRows(products)))}>⬇ New products → Easy Ecom ({products.length})</Button>
           </Option>
-          <Option n={4} done={doneBtn(combos.length > 0, () => run(() => supabase.rpc('mark_in_easy_ecom', { p_skus: combos.map((p) => p.sku), p_step: 'combos' }), () => 'New virtual combos are in Easy Ecom.'))}>
+          <Option n={2} done={doneBtn(combos.length > 0, () => run(() => supabase.rpc('mark_in_easy_ecom', { p_skus: combos.map((p) => p.sku), p_step: 'combos' }), () => 'New virtual combos are in Easy Ecom.'))}>
             <Button tone="plain" className={btn} disabled={!combos.length} onClick={() => save(`easyecom-virtual-combos-${day}.csv`, toCsv(comboRows(combos)))}>⬇ New virtual combos → Easy Ecom ({combos.length})</Button>
           </Option>
-          <Option n={5}>
+          <Option n={3}>
             <Button className={btn} disabled={!total || ready < total} onClick={onOrders}>⬇ Final upload ({total})</Button>
           </Option>
-          <Option n={6}>
+          <Option n={4}>
             <Button tone="plain" className={btn} disabled={!ready} onClick={onOrders}>⬇ Ready orders only ({ready})</Button>
           </Option>
         </ol>

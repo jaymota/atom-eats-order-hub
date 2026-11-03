@@ -37,14 +37,16 @@ export function needs(orders: NeedOrder[], combo: ComboPart[], today: string): N
     .sort((a, b) => b.open - a.open || b.sent7 - a.sent7 || b.sent30 - a.sent30 || a.sku.localeCompare(b.sku))
 }
 
-/** Shopify (online) orders in the same shape: what's not shipped yet is open, the rest was sent. */
+/** Shopify (online) orders in the same shape: what's not shipped yet is open, the rest was sent.
+ *  Lines without a SKU (the free / bonus snack add-ons) are left out: there's no product to count. */
 export interface ShopifyNeedRow { cancelled: boolean; order_date: string; sent_on: string | null; lines: { sku: string; qty: number; open: number }[] }
 export function shopifyNeedOrders(rows: ShopifyNeedRow[]): NeedOrder[] {
   const out: NeedOrder[] = []
   for (const r of rows) {
     if (r.cancelled) continue
-    const open = r.lines.filter((l) => l.open > 0).map((l) => ({ sku: l.sku, qty: l.open }))
-    const sent = r.lines.filter((l) => l.qty > l.open).map((l) => ({ sku: l.sku, qty: l.qty - l.open }))
+    const lines = r.lines.filter((l) => l.sku)
+    const open = lines.filter((l) => l.open > 0).map((l) => ({ sku: l.sku, qty: l.open }))
+    const sent = lines.filter((l) => l.qty > l.open).map((l) => ({ sku: l.sku, qty: l.qty - l.open }))
     if (open.length) out.push({ stage: 'new', order_date: r.order_date, dispatch_date: null, order_lines: open })
     if (sent.length) out.push({ stage: 'dispatched', order_date: r.order_date, dispatch_date: r.sent_on, order_lines: sent })
   }

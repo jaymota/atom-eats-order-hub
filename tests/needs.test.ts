@@ -30,7 +30,7 @@ describe('needs', () => {
 describe('shopifyNeedOrders', () => {
   it('splits part-shipped online orders and skips cancelled ones', () => {
     const rows = shopifyNeedOrders([
-      { cancelled: false, order_date: '2026-11-01', sent_on: '2026-11-02', lines: [{ sku: 'SPK03', qty: 2, open: 1 }, { sku: 'TPC01', qty: 1, open: 0 }] },
+      { cancelled: false, order_date: '2026-11-01', sent_on: '2026-11-02', lines: [{ sku: 'SPK03', qty: 2, open: 1 }, { sku: 'TPC01', qty: 1, open: 0 }, { sku: '', qty: 1, open: 1 }] },
       { cancelled: true, order_date: '2026-11-01', sent_on: null, lines: [{ sku: 'TPC01', qty: 9, open: 9 }] },
     ])
     expect(needs(rows, combo, '2026-11-03')).toEqual([

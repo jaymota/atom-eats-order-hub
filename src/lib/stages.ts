@@ -61,6 +61,14 @@ export async function attachFile(orderId: string, file: Blob & { name?: string }
   if (error) throw new Error(error.message)
 }
 
+/** Removes a file from its order, then deletes the stored copy. */
+export async function removeFile(fileId: string) {
+  const { supabase } = await import('./supabase')
+  const { data, error } = await supabase.rpc('remove_order_file', { p_id: fileId })
+  if (error) throw new Error(error.message)
+  await supabase.storage.from('order-files').remove([data as string])
+}
+
 /** Sends the hand-off email. Never blocks the work if email isn't set up. */
 export async function notify(kind: 'planned' | 'invoiced' | 'dispatched', ids: string[]) {
   try {

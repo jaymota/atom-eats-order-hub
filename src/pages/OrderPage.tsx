@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth'
 import { isAdmin, istDateTime } from '../lib/format'
 import { BASIS_LABEL, loadDraft, type Draft, type PriceBasis } from '../lib/orders'
 import { compressImage } from '../lib/readers'
-import { age, can, isLate, notify, rupees, todayIST, attachFile, type Stage } from '../lib/stages'
+import { age, can, isLate, notify, rupees, todayIST, attachFile, removeFile, type Stage } from '../lib/stages'
 import { supabase } from '../lib/supabase'
 import { todoChanged } from '../lib/todo'
 import { isBulkPack } from '../lib/match'
@@ -25,11 +25,12 @@ interface Order {
   estimate_value: number; missing: string[]; invoice_no: string | null; invoice_date: string | null; invoice_value: number | null
   po_generated: boolean; shipping_charge: number; packaging_charge: number; dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
   shared_with: string | null; planned_by: string | null; boxes: number | null; dispatch_note: string | null; delivered_at: string | null; split_from: string | null
+  ee_uploaded_at: string | null
 }
 interface Line { id: string; sku: string; qty: number; price_basis: PriceBasis | null; margin_pct: number | null; rate: number | null; value: number; product_name: string | null; mrp: number | null; tally_name: string | null; typed_as: string | null }
-interface FileRow { id: string; path: string; kind: string; name: string | null; created_at: string }
+interface FileRow { id: string; path: string; kind: string; name: string | null; created_at: string; uploaded_by: string | null }
 interface Ev { id: number; at: string; summary: string }
-interface Note { id: string; body: string; created_at: string; person: { name: string } | null }
+interface Note { id: string; body: string; created_at: string; edited_at: string | null; person_id: string; person: { name: string } | null }
 
 const SOURCE: Record<string, string> = { paste: 'pasted WhatsApp message', screenshot: 'screenshot / photo', po_file: 'PO file', blank: 'typed in', email: 'email PO' }
 
@@ -45,6 +46,7 @@ export default function OrderPage() {
   const [notes, setNotes] = useState<Note[]>([])
   const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [note, setNote] = useState('')
+  const [editNote, setEditNote] = useState<{ id: string; body: string } | null>(null)
   const [edit, setEdit] = useState<Draft | null>(null)
   const [showMsg, setShowMsg] = useState(false)
   const [savedMsg, setSavedMsg] = useState(loc.state?.saved ? `Order ${loc.state.saved} saved.` : '')
@@ -57,9 +59,9 @@ export default function OrderPage() {
     const [ord, ls, fs, ev, ns, pp] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('order_lines').select('id, sku, qty, price_basis, margin_pct, rate, value, product_name, mrp, tally_name, typed_as').eq('order_id', id).order('line_no'),
-      supabase.from('order_files').select('id, path, kind, name, created_at').eq('order_id', id).order('created_at'),
+      supabase.from('order_files').select('id, path, kind, name, created_at, uploaded_by').eq('order_id', id).order('created_at'),
       supabase.from('activity').select('id, at, summary').eq('entity_type', 'order').eq('entity_id', id).order('at'),
-      supabase.from('order_notes').select('id, body, created_at, person:people(name)').eq('order_id', id).order('created_at'),
+      supabase.from('order_notes').select('id, body, created_at, edited_at, person_id, person:people(name)').eq('order_id', id).order('created_at'),
       supabase.from('people').select('id, name'),
     ])
     if (ord.error) { setNotFound(true); return }
@@ -92,16 +94,22 @@ export default function OrderPage() {
   }
 
   const late = isLate(o.stage, o.received_at)
-  const canEdit = me?.role !== 'accounts' && (['sales_order', 'new', 'on_hold'].includes(o.stage) || isAdmin(me?.role))
+  const canEdit = me?.role !== 'accounts' && (['sales_order', 'new', 'on_hold'].includes(o.stage) || (o.stage === 'planned' && can.plan(me?.role)) || isAdmin(me?.role))
+  // Ops changing a planned order sends it back to New (admins keep its step).
+  const openEdit = async () => {
+    if (o.stage === 'planned' && !isAdmin(me?.role) && !confirm('Editing sends it back to New, to plan again. OK?')) return
+    setEdit(await loadDraft(o.id))
+  }
   const back = me?.role === 'sales' ? ['/orders/new', '← New order'] : me?.role === 'accounts' ? ['/invoices', '← All invoices'] : ['/orders', '← All orders']
   const canHold = ['super_admin', 'admin', 'manager', 'ops'].includes(me?.role ?? '')
   const deliverTo = o.same_as_billing
     ? [o.customer_name, o.billing_address, o.billing_city, o.billing_state, o.billing_pin]
     : [o.delivery_name, o.delivery_address, o.delivery_city, o.delivery_state, o.delivery_pin]
 
-  const hold = async (action: 'hold' | 'cancel' | 'resume') => {
-    const reason = action === 'resume' ? '' : prompt(action === 'hold' ? 'Why is this order on hold?' : 'Why is this order cancelled?') ?? ''
-    if (action !== 'resume' && !reason.trim()) return
+  const hold = async (action: 'hold' | 'cancel' | 'resume' | 'uncancel') => {
+    if (action === 'uncancel' && !confirm(`Bring back ${o.order_no}?`)) return
+    const reason = action === 'resume' || action === 'uncancel' ? '' : prompt(action === 'hold' ? 'Why is this order on hold?' : 'Why is this order cancelled?') ?? ''
+    if ((action === 'hold' || action === 'cancel') && !reason.trim()) return
     const { error: e } = await supabase.rpc('set_order_hold', { p_order: o.id, p_action: action, p_reason: reason })
     if (e) setError(e.message)
     load()
@@ -137,7 +145,8 @@ export default function OrderPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canEdit && <Button tone="plain" onClick={async () => setEdit(await loadDraft(o.id))}>Edit</Button>}
+          {canEdit && <Button tone="plain" onClick={openEdit}>Edit</Button>}
+          {o.stage === 'cancelled' && isAdmin(me?.role) && <Button tone="plain" onClick={() => hold('uncancel')}>Bring back</Button>}
           {canHold && !['cancelled', 'dispatched', 'delivered'].includes(o.stage) && (o.stage === 'on_hold'
             ? <Button tone="plain" onClick={() => hold('resume')}>Take off hold</Button>
             : <Button tone="plain" onClick={() => hold('hold')}>Put on hold</Button>)}
@@ -153,7 +162,7 @@ export default function OrderPage() {
       )}
       {o.missing.length > 0 && o.stage !== 'sales_order' && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <b>Missing information</b> (needed before dispatch planning): {o.missing.join(', ')}. {canEdit && <button type="button" className="font-semibold underline" onClick={async () => setEdit(await loadDraft(o.id))}>Fill it in</button>}
+          <b>Missing information</b> (needed before dispatch planning): {o.missing.join(', ')}. {canEdit && <button type="button" className="font-semibold underline" onClick={openEdit}>Fill it in</button>}
         </div>
       )}
       {o.stage === 'on_hold' && o.hold_reason && <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm">On hold: {o.hold_reason}</p>}
@@ -170,6 +179,7 @@ export default function OrderPage() {
             {o.dispatch_note && field('Dispatch note', o.dispatch_note)}
             {o.delivered_at && field('Delivered', istDateTime(o.delivered_at))}
           </dl>
+          <InvoiceFix o={o} role={me?.role} onDone={(m) => { setSavedMsg(m); setError(''); load() }} onError={setError} />
         </Card>
       )}
 
@@ -240,6 +250,11 @@ export default function OrderPage() {
                   {/\.(jpe?g|png|webp)$/i.test(f.path) && f.url ? <img src={f.url} alt={f.name ?? ''} className="h-28 w-28 rounded-lg border object-cover" /> : <span className="inline-block rounded-lg border px-3 py-2 text-ae-blue underline">{f.name ?? 'file'}</span>}
                 </a>
                 <Badge>{f.kind}</Badge>
+                {(f.uploaded_by === me?.id || isAdmin(me?.role) || (f.kind === 'invoice' && can.invoice(me?.role))) && <button type="button" className="ml-2 text-xs text-stone-500 underline" onClick={async () => {
+                  if (!confirm(`Remove ${f.name ?? 'this file'}?`)) return
+                  try { await removeFile(f.id); setSavedMsg('File removed.') } catch (e) { setError((e as Error).message) }
+                  load()
+                }}>Remove</button>}
               </li>
             ))}
           </ul>
@@ -256,7 +271,31 @@ export default function OrderPage() {
         <Card>
           <h3 className="mb-2 font-semibold text-ae-blue">Notes from the team</h3>
           <ul className="mb-3 space-y-2 text-sm">
-            {notes.map((n) => <li key={n.id}><div className="text-stone-800">{n.body}</div><div className="text-xs text-stone-500">{n.person?.name} · {istDateTime(n.created_at)}</div></li>)}
+            {notes.map((n) => <li key={n.id}>
+              {editNote?.id === n.id ? (
+                <div className="flex gap-2">
+                  <Input value={editNote.body} onChange={(e) => setEditNote({ ...editNote, body: e.target.value })} />
+                  <Button disabled={!editNote.body.trim()} onClick={async () => {
+                    const { error: e } = await supabase.rpc('edit_order_note', { p_id: n.id, p_body: editNote.body })
+                    if (e) setError(e.message)
+                    else { setEditNote(null); load() }
+                  }}>Save</Button>
+                  <Button tone="plain" onClick={() => setEditNote(null)}>Back</Button>
+                </div>
+              ) : <div className="text-stone-800">{n.body}</div>}
+              <div className="text-xs text-stone-500">
+                {n.person?.name} · {istDateTime(n.created_at)}{n.edited_at && ' · edited'}
+                {(n.person_id === me?.id || isAdmin(me?.role)) && editNote?.id !== n.id && <>
+                  {' · '}<button type="button" className="underline" onClick={() => setEditNote({ id: n.id, body: n.body })}>Edit</button>
+                  {' · '}<button type="button" className="underline" onClick={async () => {
+                    if (!confirm('Delete this note?')) return
+                    const { error: e } = await supabase.rpc('delete_order_note', { p_id: n.id })
+                    if (e) setError(e.message)
+                    load()
+                  }}>Delete</button>
+                </>}
+              </div>
+            </li>)}
             {!notes.length && <li className="text-stone-500">No notes yet.</li>}
           </ul>
           <div className="flex gap-2">
@@ -270,6 +309,59 @@ export default function OrderPage() {
         </Card>
       </div>
       {me?.role !== 'accounts' && <div className="pb-6"><button type="button" className="text-sm text-stone-500 underline" onClick={() => navigate('/orders/new')}>Enter another order</button></div>}
+    </div>
+  )
+}
+
+// ---------- Fixing a saved invoice (accounts), and the Easy Ecom tick ----------
+function InvoiceFix({ o, role, onDone, onError }: { o: Order; role?: string; onDone: (msg: string) => void; onError: (e: string) => void }) {
+  const [inv, setInv] = useState<ReturnType<typeof blankInv> | null>(null)
+  const [busy, setBusy] = useState(false)
+  const mayFix = !!o.invoice_no && ['invoiced', 'dispatched', 'delivered'].includes(o.stage) && can.invoice(role)
+  const mayUntick = !!o.ee_uploaded_at && ['super_admin', 'admin', 'manager', 'ops', 'accounts'].includes(role ?? '')
+  const run = async (fn: () => Promise<string>) => {
+    setBusy(true)
+    try { onDone(await fn()) } catch (e) { onError((e as Error).message) }
+    setBusy(false)
+  }
+  const save = (v: NonNullable<typeof inv>) => run(async () => {
+    const { error } = await supabase.rpc('fix_invoice', { p: { id: o.id, invoice_no: v.invoice_no, invoice_date: v.invoice_date, invoice_value: v.invoice_value } })
+    if (error) throw new Error(error.message)
+    // A new PDF replaces the old one.
+    if (v.file) {
+      const { data } = await supabase.from('order_files').select('id').eq('order_id', o.id).eq('kind', 'invoice')
+      await attachFile(o.id, v.file, 'invoice')
+      for (const f of data ?? []) await removeFile(f.id).catch(() => {})
+    }
+    setInv(null)
+    return 'Invoice changed.'
+  })
+  if (!mayFix && !o.ee_uploaded_at) return null
+  return (
+    <div className="mt-3 space-y-2 text-sm">
+      {o.ee_uploaded_at && (
+        <div className="text-stone-600">
+          ✓ In Easy Ecom · {istDateTime(o.ee_uploaded_at)}
+          {mayUntick && <> · <button type="button" className="underline" disabled={busy} onClick={() => confirm('Mark as not uploaded? It goes back into the next upload file.') && run(async () => {
+            const { error } = await supabase.rpc('mark_ee_uploaded', { p_ids: [o.id], p_undo: true })
+            if (error) throw new Error(error.message)
+            return 'Marked as not uploaded.'
+          })}>Undo</button></>}
+        </div>
+      )}
+      {inv ? (
+        <div className="space-y-2">
+          <InvoiceFields v={inv} set={setInv} />
+          {inv.file && <p className="text-xs text-stone-500">Replaces the old PDF.</p>}
+          {o.ee_uploaded_at && <p className="text-xs text-amber-700">Easy Ecom still has the old invoice.</p>}
+          <div className="flex gap-2">
+            <Button disabled={busy || !invReady(inv)} onClick={() => save(inv)}>Save invoice</Button>
+            <Button tone="plain" onClick={() => setInv(null)}>Back</Button>
+          </div>
+        </div>
+      ) : mayFix && (
+        <Button tone="plain" className="min-h-10 px-3 text-sm" onClick={() => setInv({ invoice_no: o.invoice_no ?? '', invoice_date: o.invoice_date ?? todayIST(), invoice_value: String(o.invoice_value ?? '') })}>✏️ Change invoice</Button>
+      )}
     </div>
   )
 }
@@ -318,22 +410,23 @@ function NextStep({ o, lines, role, onDone, onError }: { o: Order; lines: Line[]
   } else if (['dispatched', 'delivered'].includes(o.stage) && can.dispatch(role)) {
     body = trk ? (
       <div className="space-y-2">
+        <Input type="date" className="max-w-44" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Dispatch date" />
         <DispatchFields v={trk} set={setTrk} />
         <div className="flex gap-2">
-          <Button disabled={busy || !dispReady(trk)} onClick={() => run(async () => { await saveTracking(o.id, trk); setTrk(null); return 'Tracking saved.' })}>Save tracking</Button>
+          <Button disabled={busy || !dispReady(trk) || !date} onClick={() => run(async () => { await saveTracking(o.id, trk, date); setTrk(null); return 'Dispatch details saved.' })}>Save</Button>
           <Button tone="plain" onClick={() => setTrk(null)}>Back</Button>
         </div>
       </div>
     ) : (
       <div className="flex flex-wrap gap-2">
         {o.stage === 'dispatched' && <Button disabled={busy} onClick={() => run(async () => { await rpc('mark_delivered', { p_ids: [o.id] }); return 'Delivered.' })}>Delivered</Button>}
-        <Button tone={o.tracking_no ? 'plain' : 'primary'} disabled={busy} onClick={() => setTrk(savedDisp(o))}>{o.tracking_no ? '✏️ Tracking' : '+ Tracking'}</Button>
+        <Button tone={o.tracking_no ? 'plain' : 'primary'} disabled={busy} onClick={() => { setTrk(savedDisp(o)); setDate(o.dispatch_date ?? todayIST()) }}>{o.tracking_no ? '✏️ Dispatch details' : '+ Tracking'}</Button>
         <Button tone="plain" disabled={busy} onClick={() => proofRef.current?.click()}>📎 Proof / GRN</Button>
         <input ref={proofRef} type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run(async () => { await attachFile(o.id, f, 'grn'); return 'File added.' }) }} />
       </div>
     )
   }
-  const mayUndo = (o.stage === 'planned' && can.plan(role)) || (o.stage === 'invoiced' && (o.channel === 'FOC' && !o.invoice_no ? can.plan(role) : can.invoice(role))) || (o.stage === 'dispatched' && (role === 'admin' || role === 'super_admin'))
+  const mayUndo = (o.stage === 'planned' && can.plan(role)) || (o.stage === 'invoiced' && (o.channel === 'FOC' && !o.invoice_no ? can.plan(role) : can.invoice(role))) || (o.stage === 'dispatched' && (role === 'admin' || role === 'super_admin')) || (o.stage === 'delivered' && can.dispatch(role))
   if (!body && !mayUndo && !canSplit) return null
 
   return (

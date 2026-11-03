@@ -254,8 +254,8 @@ export async function saveDispatches(date: string, entries: [string, Disp][]): P
 }
 
 /** Add or fix tracking on an order that has already left. */
-export async function saveTracking(id: string, v: Disp) {
-  const { error } = await supabase.rpc('update_tracking', { p: { id, courier: v.courier, tracking_no: v.tracking_no, boxes: v.boxes, dispatch_note: v.dispatch_note } })
+export async function saveTracking(id: string, v: Disp, dispatch_date?: string) {
+  const { error } = await supabase.rpc('update_tracking', { p: { id, courier: v.courier, tracking_no: v.tracking_no, boxes: v.boxes, dispatch_note: v.dispatch_note, ...(dispatch_date && { dispatch_date }) } })
   if (error) throw new Error(error.message)
   if (v.file) await attachFile(id, await slip(v.file), 'tracking')
 }

@@ -241,7 +241,7 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
         )}
         {adding === 'new' && <div className="mt-3"><AddProduct onCancel={() => setAdding(false)} onAdded={addLine} /></div>}
         {!adding && <Button tone="plain" className="mt-3" onClick={() => setAdding('pick')}>+ Add a product</Button>}
-        <div className="mt-3 text-right text-sm text-stone-700">{(d.shipping_charge ?? 0) > 0 && <div>+ shipping {rupees(d.shipping_charge)}</div>}Estimated value (incl. GST): <b className="text-lg text-stone-900">{rupees(total)}</b></div>
+        <div className="mt-3 text-right text-sm text-stone-700">{(d.shipping_charge ?? 0) > 0 && <div>+ shipping {rupees(d.shipping_charge)}</div>}{(d.packaging_charge ?? 0) > 0 && <div>+ packaging {rupees(d.packaging_charge)}</div>}Estimated value (incl. GST): <b className="text-lg text-stone-900">{rupees(total)}</b></div>
       </Card>
 
       <Card>
@@ -255,6 +255,9 @@ export default function OrderReview({ draft, setDraft, onBack, onSaved }: { draf
           </Field>
           <Field label="Shipping charge ₹" hint="Accounts adds this to the invoice">
             <Input inputMode="decimal" placeholder="0" value={d.shipping_charge ?? ''} onChange={(e) => { const v = e.target.value.replace(/[^\d.]/g, ''); setDraft({ ...d, shipping_charge: v === '' ? null : Number(v) }) }} />
+          </Field>
+          <Field label="Packaging charge ₹" hint="Accounts adds this to the invoice">
+            <Input inputMode="decimal" placeholder="0" value={d.packaging_charge ?? ''} onChange={(e) => { const v = e.target.value.replace(/[^\d.]/g, ''); setDraft({ ...d, packaging_charge: v === '' ? null : Number(v) }) }} />
           </Field>
           <Field label="Notes"><Input {...inp('notes')} /></Field>
         </div>

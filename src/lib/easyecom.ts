@@ -19,6 +19,7 @@ export interface EeOrder {
   invoice_no: string | null; invoice_date: string | null; invoice_value: number | null; shared_with: string | null
   dispatch_date: string | null; courier: string | null; tracking_no: string | null; ee_uploaded_at: string | null; estimate_value: number
   shipping_charge: number
+  packaging_charge: number
   order_lines: EeLine[]
   customer: EeCustomer | null
 }
@@ -87,9 +88,9 @@ export function offlineRows(orders: EeOrder[]): unknown[][] {
   for (const o of orders) {
     const s = shipTo(o)
     const pay = offlinePayment(o.payment_type)
+    // Shipping and packaging charges stay in the Hub and Tally: never sent to Easy Ecom.
     for (const l of o.order_lines) for (let u = 1; u <= l.qty; u++) {
-      const ship = l === o.order_lines[0] && u === 1 && Number(o.shipping_charge) > 0 ? price(o.shipping_charge) : '' // once per order
-      rows.push(['Offline', `\`${o.order_no}-${l.line_no}-${u}`, o.order_no, price(l.rate ?? 0), ship, '', '', 1, o.order_date, l.sku, 'N', o.courier ?? '',
+      rows.push(['Offline', `\`${o.order_no}-${l.line_no}-${u}`, o.order_no, price(l.rate ?? 0), '', '', '', 1, o.order_date, l.sku, 'N', o.courier ?? '',
         s.name, s.phone ?? '', o.email ?? '', s.address ?? '', '', s.city ?? '', s.state ?? '', 'India', s.pin ?? '', '',
         o.customer_name, o.billing_address ?? '', '', o.billing_city ?? '', o.billing_state ?? '', 'India', o.billing_pin ?? '', o.phone ?? '',
         o.invoice_no ?? '', o.tracking_no ?? '', pay, '', o.gstin ?? '', 'Yes', pay === 'COD' ? price(l.rate ?? 0) : ''])
@@ -194,6 +195,7 @@ export function masterRows(orders: EeOrder[], people: Map<string, string>): Reco
       'SKU': l.sku, 'Product': l.product_name ?? '', 'Tally item': l.tally_name ?? '', 'HSN': l.hsn ?? '', 'Qty': l.qty, 'Rate (incl. GST)': l.rate ?? '',
       'GST %': l.gst_rate ?? '', 'Line value': Number(l.value), 'MRP': isBulkPack(l.product_name) ? '' : l.mrp ?? '',
       'Shipping (order)': l === o.order_lines[0] ? Number(o.shipping_charge) || '' : '',
+      'Packaging (order)': l === o.order_lines[0] ? Number(o.packaging_charge) || '' : '',
       'Invoice no.': o.invoice_no ?? '', 'Invoice date': o.invoice_date ?? '', 'Invoice value': o.invoice_value ?? '',
       'Dispatch date': o.dispatch_date ?? '', 'Courier': o.courier ?? '', 'Tracking': o.tracking_no ?? '', 'In Easy Ecom': o.ee_uploaded_at ? 'Yes' : 'No',
     }))

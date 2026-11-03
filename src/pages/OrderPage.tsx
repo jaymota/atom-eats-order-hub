@@ -23,7 +23,7 @@ interface Order {
   delivery_gstin: string | null; delivery_contact: string | null; delivery_phone: string | null; po_number: string | null; po_date: string | null; po_expiry: string | null; po_revised: boolean
   needed_by: string | null; payment_type: string | null; courier_pref: string | null; notes: string | null; source: string; source_text: string | null
   estimate_value: number; missing: string[]; invoice_no: string | null; invoice_date: string | null; invoice_value: number | null
-  po_generated: boolean; shipping_charge: number; dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
+  po_generated: boolean; shipping_charge: number; packaging_charge: number; dispatch_date: string | null; courier: string | null; tracking_no: string | null; hold_reason: string | null; cancel_reason: string | null
   shared_with: string | null; planned_by: string | null; boxes: number | null; dispatch_note: string | null; delivered_at: string | null; split_from: string | null
 }
 interface Line { id: string; sku: string; qty: number; price_basis: PriceBasis | null; margin_pct: number | null; rate: number | null; value: number; product_name: string | null; mrp: number | null; tally_name: string | null; typed_as: string | null }
@@ -195,6 +195,7 @@ export default function OrderPage() {
         </div>
         <div className="mt-2 text-right text-sm">
           {Number(o.shipping_charge) > 0 && <div className="font-semibold text-ae-blue">🚚 Shipping {rupees(o.shipping_charge)} (add to invoice)</div>}
+          {Number(o.packaging_charge) > 0 && <div className="font-semibold text-ae-blue">📦 Packaging {rupees(o.packaging_charge)} (add to invoice)</div>}
           {o.invoice_value != null ? <>Invoice value: <b>{rupees(o.invoice_value)}</b></> : <>Estimated value (incl. GST): <b>{rupees(o.estimate_value)}</b></>}
         </div>
       </Card>

@@ -8,7 +8,7 @@ const o = (x: Partial<EeOrder> = {}): EeOrder => ({
   delivery_name: null, delivery_address: null, delivery_city: null, delivery_state: null, delivery_pin: null, delivery_gstin: null, delivery_phone: null,
   po_number: 'AE-PO-00003', po_date: null, payment_type: 'Credit', payment_terms: null, notes: null,
   invoice_no: 'AT/0988/2026-27', invoice_date: '2026-10-28', invoice_value: 300, shared_with: null, dispatch_date: '2026-10-28', courier: 'DTDC', tracking_no: 'D1',
-  ee_uploaded_at: null, estimate_value: 300, shipping_charge: 0,
+  ee_uploaded_at: null, estimate_value: 300, shipping_charge: 0, packaging_charge: 0,
   order_lines: [{ line_no: 1, sku: 'TPC01', qty: 3, rate: 100, value: 300, mrp: 125, ean: '890', gst_rate: 5, hsn: null, tally_name: null, product_name: 'Truffle' }],
   customer: { code: 'AE-0007', ee_customer_code: 'EE77', in_easy_ecom: false }, ...x,
 })
@@ -26,6 +26,10 @@ describe('Easy Ecom files', () => {
     expect(r[3][1]).toBe('`ORD-00009-1-3')
     expect(r[1][OFFLINE_HEAD.indexOf('Payment Type*')]).toBe('Prepaid')
     expect(r[1][OFFLINE_HEAD.indexOf('Invoice Code')]).toBe('AT/0988/2026-27')
+  })
+  it('leaves shipping and packaging charges out of the Easy Ecom file', () => {
+    const r = offlineRows([o({ shipping_charge: 250, packaging_charge: 12000 })])
+    for (const row of r.slice(1)) for (const h of ['Shipping Charges', 'Gift Wrap Charges']) expect(row[OFFLINE_HEAD.indexOf(h)]).toBe('')
   })
   it('CSV keeps commas, quotes and new lines safe', () => {
     expect(toCsv([['a,b', 'say "hi"', 'x\ny', 'plain', 3]])).toBe('"a,b","say ""hi""","x, y",plain,3\r\n')

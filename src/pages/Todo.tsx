@@ -12,10 +12,10 @@ interface Row {
   id: string; order_no: string; received_at: string; stage: Stage; channel: string; customer_name: string
   gstin: string | null; delivery_city: string | null; billing_city: string | null; estimate_value: number; missing: string[]
   po_number: string | null; po_expiry: string | null; po_revised: boolean; courier_pref: string | null; planned_by: string | null; invoice_no: string | null; invoice_value: number | null
-  shipping_charge: number; courier: string | null; tracking_no: string | null; boxes: number | null; dispatch_note: string | null; dispatch_date: string | null
+  shipping_charge: number; packaging_charge: number; courier: string | null; tracking_no: string | null; boxes: number | null; dispatch_note: string | null; dispatch_date: string | null
   order_lines: { product_name: string | null; qty: number; tally_name: string | null; rate: number | null; sku: string }[]
 }
-const COLS = 'id, order_no, received_at, stage, channel, customer_name, gstin, delivery_city, billing_city, estimate_value, missing, po_number, po_expiry, po_revised, courier_pref, planned_by, invoice_no, invoice_value, shipping_charge, courier, tracking_no, boxes, dispatch_note, dispatch_date, order_lines(product_name, qty, tally_name, rate, sku, line_no)'
+const COLS = 'id, order_no, received_at, stage, channel, customer_name, gstin, delivery_city, billing_city, estimate_value, missing, po_number, po_expiry, po_revised, courier_pref, planned_by, invoice_no, invoice_value, shipping_charge, packaging_charge, courier, tracking_no, boxes, dispatch_note, dispatch_date, order_lines(product_name, qty, tally_name, rate, sku, line_no)'
 
 function useStageRows(stage: Stage | 'no_tracking') {
   const [rows, setRows] = useState<Row[] | null>(null)
@@ -202,6 +202,7 @@ export function InvoicePage() {
               <Head o={o} />
               <div className="text-xs text-stone-500">{o.gstin ? `GSTIN ${o.gstin}` : 'No GSTIN'} · PO {o.po_number ?? '—'}</div>
               {Number(o.shipping_charge) > 0 && <div className="rounded-lg bg-ae-yellow px-3 py-1.5 text-sm font-semibold text-ae-blue">🚚 Add shipping {rupees(o.shipping_charge)}</div>}
+              {Number(o.packaging_charge) > 0 && <div className="rounded-lg bg-ae-yellow px-3 py-1.5 text-sm font-semibold text-ae-blue">📦 Add packaging {rupees(o.packaging_charge)}</div>}
               <ul className="rounded-lg bg-stone-50 px-3 py-2 text-sm">
                 {o.order_lines.map((l, i) => (
                   <li key={i} className="flex justify-between gap-2"><span>{l.qty} × {l.tally_name ?? <span>{l.product_name} <span className="text-xs text-amber-700">(no Tally name)</span></span>}</span><span className="whitespace-nowrap text-stone-500">{rupees(l.rate)}</span></li>

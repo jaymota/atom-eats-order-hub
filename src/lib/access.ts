@@ -14,6 +14,7 @@ export const PAGE_ROLES: Record<string, string[]> = {
   '/orders': TEAM,
   '/invoices': ACC,
   '/downloads': TEAM,
+  '/needs': TEAM,
   '/products': TEAM,
   '/customers': TEAM,
   '/checks': TEAM,

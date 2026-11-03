@@ -13,6 +13,7 @@ import Inbox from './pages/Inbox'
 import Invoices from './pages/Invoices'
 import Layout from './pages/Layout'
 import Login from './pages/Login'
+import Needs from './pages/Needs'
 import NewOrder from './pages/NewOrder'
 import OrderPage from './pages/OrderPage'
 import Orders from './pages/Orders'
@@ -49,6 +50,7 @@ function Gate() {
           <Route path="dispatch" element={<Only path="/dispatch"><DispatchPage /></Only>} />
           <Route path="invoices" element={<Only path="/invoices"><Invoices /></Only>} />
           <Route path="downloads" element={<Only path="/downloads"><Downloads /></Only>} />
+          <Route path="needs" element={<Only path="/needs"><Needs /></Only>} />
           <Route path="products" element={<Only path="/products"><Products /></Only>} />
           <Route path="customers" element={<Only path="/customers"><Customers /></Only>} />
           <Route path="checks" element={<Only path="/checks"><Checks /></Only>} />

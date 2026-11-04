@@ -17,7 +17,7 @@ export interface EeOrder {
   delivery_pin: string | null; delivery_gstin: string | null; delivery_phone: string | null
   po_number: string | null; po_date: string | null; payment_type: string | null; payment_terms: string | null; notes: string | null
   invoice_no: string | null; invoice_date: string | null; invoice_value: number | null; shared_with: string | null
-  dispatch_date: string | null; courier: string | null; tracking_no: string | null; ee_uploaded_at: string | null; estimate_value: number
+  dispatch_date: string | null; courier: string | null; tracking_no: string | null; ee_uploaded_at: string | null; ee_file_at?: string | null; estimate_value: number
   shipping_charge: number
   packaging_charge: number
   order_lines: EeLine[]
@@ -200,4 +200,27 @@ export function masterRows(orders: EeOrder[], people: Map<string, string>): Reco
       'Dispatch date': o.dispatch_date ?? '', 'Courier': o.courier ?? '', 'Tracking': o.tracking_no ?? '', 'In Easy Ecom': o.ee_uploaded_at ? 'Yes' : 'No',
     }))
   })
+}
+
+/** Easy Ecom takes under 2,000 rows per upload, and the Shipped format is one row per unit. Splits the
+ *  orders into files of at most `max` rows, each order whole (biggest first, so the parts stay few). */
+export const MAX_ROWS = 1900
+export const unitsOf = (o: EeOrder) => o.order_lines.reduce((t, l) => t + l.qty, 0)
+export function batches(orders: EeOrder[], max = MAX_ROWS): EeOrder[][] {
+  const parts: { rows: number; orders: EeOrder[] }[] = []
+  for (const o of [...orders].sort((a, b) => unitsOf(b) - unitsOf(a))) {
+    const n = unitsOf(o)
+    const p = parts.find((x) => x.rows + n <= max)
+    if (p) { p.rows += n; p.orders.push(o) } else parts.push({ rows: n, orders: [o] })
+  }
+  return parts.map((p) => p.orders.sort((a, b) => a.order_no.localeCompare(b.order_no)))
+}
+
+/** Orders already in Easy Ecom according to its sales report (a CSV): our order number as the Reference
+ *  Code (Shipped uploads), or our invoice number inside MP Ref No / Reference Code (entered there as B2B). */
+export function inSalesReport(orders: EeOrder[], rows: Record<string, string>[]): EeOrder[] {
+  const refs = new Set<string>()
+  for (const r of rows) for (const k of ['Reference Code', 'MP Ref No']) if (r[k]) refs.add(r[k].replace(/[`'\s]/g, '').toUpperCase())
+  const inv = (o: EeOrder) => (o.invoice_no ?? '').toUpperCase().replace(/\s/g, '')
+  return orders.filter((o) => refs.has(o.order_no.toUpperCase()) || (inv(o).length >= 5 && (refs.has(inv(o)) || refs.has(`B2B/${inv(o)}`))))
 }

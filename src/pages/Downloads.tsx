@@ -1,12 +1,12 @@
 // Easy Ecom Sync (the /downloads page): the evening Easy Ecom upload as four fixed options (components/EeSetup) and the
 // dispatched orders they cover. Orders go in as Shipped retail orders, so Easy Ecom takes the stock off at once.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import EeSetup from '../components/EeSetup'
 import { Badge, Button, Card, ErrorBox, Input, OkBox, Select } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { fetchAll } from '../lib/catalog'
-import { masterRows, offlineRows, problems, toCsv, type EeOrder } from '../lib/easyecom'
+import { MAX_ROWS, batches, inSalesReport, masterRows, offlineRows, problems, toCsv, unitsOf, type EeOrder } from '../lib/easyecom'
 import { rupees, todayIST } from '../lib/stages'
 import { supabase } from '../lib/supabase'
 import { StageBadge } from './Orders'
@@ -14,7 +14,7 @@ import { StageBadge } from './Orders'
 const COLS = `id, order_no, order_date, channel, stage, salesperson_id, customer_id, customer_name, contact_name, phone, email, gstin, fssai,
   billing_address, billing_city, billing_state, billing_pin, same_as_billing, delivery_name, delivery_address, delivery_city, delivery_state, delivery_pin,
   delivery_gstin, delivery_phone, po_number, po_date, payment_type, payment_terms, notes, invoice_no, invoice_date, invoice_value, shared_with,
-  dispatch_date, courier, tracking_no, ee_uploaded_at, estimate_value, shipping_charge, packaging_charge,
+  dispatch_date, courier, tracking_no, ee_uploaded_at, ee_file_at, estimate_value, shipping_charge, packaging_charge,
   order_lines(line_no, sku, qty, rate, value, mrp, ean, gst_rate, hsn, tally_name, product_name),
   customer:customers(code, ee_customer_code, in_easy_ecom)`
 
@@ -39,6 +39,9 @@ export default function Downloads() {
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [parts, setParts] = useState<EeOrder[][] | null>(null)
+  const [found, setFound] = useState<EeOrder[] | null>(null)
+  const reportRef = useRef<HTMLInputElement>(null)
   const allowed = ['super_admin', 'admin', 'manager', 'ops', 'accounts'].includes(me?.role ?? '')
 
   const load = useCallback(async () => {
@@ -64,8 +67,9 @@ export default function Downloads() {
     return true
   }), [orders, show, from, to])
   const ok = useMemo(() => list.filter((o) => !problems(o, eeSkus).length), [list, eeSkus])
-  // Tick everything that is fine whenever the list changes.
-  useEffect(() => { setPicked(new Set(ok.filter((o) => !o.ee_uploaded_at).map((o) => o.id))) }, [ok])
+  // Tick everything that is fine whenever the list changes, except orders already put in a file.
+  useEffect(() => { setPicked(new Set(ok.filter((o) => !o.ee_uploaded_at && !o.ee_file_at).map((o) => o.id))) }, [ok])
+  const inFile = list.filter((o) => !o.ee_uploaded_at && o.ee_file_at)
   const chosen = list.filter((o) => picked.has(o.id))
   const day = todayIST()
 
@@ -86,6 +90,35 @@ export default function Downloads() {
     load()
   }
 
+  const rpc = async (name: string, args: Record<string, unknown>, done: string) => {
+    setBusy(true); setError(''); setMsg('')
+    const { data, error: e } = await supabase.rpc(name, args)
+    setBusy(false)
+    if (e) { setError(e.message); return false }
+    setMsg(done.replace('N', String(data))); load()
+    return true
+  }
+  // Easy Ecom takes under 2,000 rows a file, so big days come as numbered parts, each ticked on its own.
+  const makeFiles = () => {
+    const todo = chosen.filter((o) => !o.ee_uploaded_at)
+    const p = batches(todo)
+    if (p.length === 1) { downloadPart(p[0], ''); setParts(null) } else setParts(p)
+  }
+  const downloadPart = (p: EeOrder[], suffix: string) => {
+    csv(`easyecom-shipped-orders-${day}${suffix}.csv`, offlineRows(p))
+    supabase.rpc('mark_ee_file', { p_ids: p.map((o) => o.id) }).then(() => load())
+  }
+  const checkReport = async (f: File) => {
+    setError(''); setMsg('')
+    try {
+      const X = await import('xlsx')
+      const wb = X.read(await f.arrayBuffer(), { type: 'array' })
+      const rows = X.utils.sheet_to_json<Record<string, string>>(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false })
+      if (!rows.length || !('Reference Code' in rows[0])) throw new Error('Please choose Easy Ecom’s sales report (CSV).')
+      setFound(inSalesReport((orders ?? []).filter((o) => !o.ee_uploaded_at), rows))
+    } catch (e) { setError((e as Error).message) }
+  }
+
   const toggle = (id: string, v: boolean) => { const s = new Set(picked); if (v) s.add(id); else s.delete(id); setPicked(s) }
   const units = chosen.reduce((s, o) => s + o.order_lines.reduce((t, l) => t + l.qty, 0), 0)
 
@@ -102,8 +135,56 @@ export default function Downloads() {
 
       {orders && (
         <EeSetup orders={list} eeSkus={eeSkus} day={day} save={(n, d) => save(n, d, 'text/csv;charset=utf-8')} onChange={load}
-          ready={chosen.filter((o) => !o.ee_uploaded_at).length} total={list.filter((o) => !o.ee_uploaded_at).length}
-          onOrders={() => csv(`easyecom-shipped-orders-${day}.csv`, offlineRows(chosen.filter((o) => !o.ee_uploaded_at)))} />
+          ready={chosen.filter((o) => !o.ee_uploaded_at).length} total={list.filter((o) => !o.ee_uploaded_at && !o.ee_file_at).length}
+          onOrders={makeFiles} />
+      )}
+
+      {allowed && (
+        <div className="text-sm">
+          <button type="button" className="font-semibold text-ae-blue underline" onClick={() => reportRef.current?.click()}>Check Easy Ecom report</button>
+          <input ref={reportRef} type="file" accept=".csv,.xlsx" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) checkReport(f) }} />
+        </div>
+      )}
+      {found && (
+        <Card className="space-y-2 border-amber-300 bg-amber-50 p-3">
+          {found.length ? <>
+            <p className="text-sm font-semibold text-amber-900">Already in Easy Ecom: {found.map((o) => o.order_no).join(', ')}</p>
+            <div className="flex gap-2">
+              <Button className="min-h-10 px-3 text-sm" disabled={busy} onClick={async () => { if (await rpc('mark_ee_uploaded', { p_ids: found.map((o) => o.id) }, 'N marked as uploaded.')) setFound(null) }}>✓ Mark {found.length} uploaded</Button>
+              <Button tone="plain" className="min-h-10 px-3 text-sm" onClick={() => setFound(null)}>Close</Button>
+            </div>
+          </> : <div className="flex items-center justify-between gap-2"><p className="text-sm text-stone-700">None of the waiting orders are in this report.</p><Button tone="plain" className="min-h-10 px-3 text-sm" onClick={() => setFound(null)}>Close</Button></div>}
+        </Card>
+      )}
+
+      {parts && (
+        <Card className="space-y-2 border-ae-blue/30 p-3">
+          <p className="text-sm font-semibold text-ae-blue">{parts.length} files: Easy Ecom takes {MAX_ROWS.toLocaleString('en-IN')} rows at a time. Upload one, wait for it to finish, then ✓ it.</p>
+          <ul className="divide-y divide-stone-100">
+            {parts.map((p, i) => {
+              const done = p.every((o) => (orders ?? []).find((x) => x.id === o.id)?.ee_uploaded_at)
+              return (
+                <li key={i} className="flex flex-wrap items-center gap-2 py-2">
+                  <Button tone="plain" className="min-h-10 px-3 text-sm" disabled={done} onClick={() => downloadPart(p, `-part${i + 1}of${parts.length}`)}>⬇ Part {i + 1} of {parts.length}</Button>
+                  <span className="text-sm text-stone-600">{p.length} orders · {p.reduce((t, o) => t + unitsOf(o), 0)} rows</span>
+                  {done ? <Badge tone="green">Uploaded</Badge> : <Button className="ml-auto min-h-10 px-3 text-sm" disabled={busy} onClick={() => rpc('mark_ee_uploaded', { p_ids: p.map((o) => o.id) }, 'N marked as uploaded.')}>✓ Part {i + 1} uploaded</Button>}
+                </li>
+              )
+            })}
+          </ul>
+          <Button tone="plain" className="min-h-9 px-3 text-sm" onClick={() => setParts(null)}>Close</Button>
+        </Card>
+      )}
+
+      {inFile.length > 0 && (
+        <Card className="space-y-2 border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-semibold text-amber-900">In an earlier file, not ticked: {inFile.map((o) => o.order_no).join(', ')}</p>
+          <p className="text-xs text-amber-900">Check Easy Ecom first. Left out of new files until you choose.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button className="min-h-10 px-3 text-sm" disabled={busy} onClick={() => rpc('mark_ee_uploaded', { p_ids: inFile.map((o) => o.id) }, 'N marked as uploaded.')}>✓ They're in Easy Ecom</Button>
+            <Button tone="plain" className="min-h-10 px-3 text-sm" disabled={busy} onClick={() => rpc('mark_ee_file', { p_ids: inFile.map((o) => o.id), p_undo: true }, 'N put back for the next file.')}>Put back</Button>
+          </div>
+        </Card>
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-600">
@@ -129,7 +210,7 @@ export default function Downloads() {
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
                       {o.order_no} · {o.invoice_no} · {o.dispatch_date ?? 'not sent'} <StageBadge stage={o.stage as never} />
-                      {o.ee_uploaded_at && <Badge tone="green">In Easy Ecom</Badge>}
+                      {o.ee_uploaded_at ? <Badge tone="green">In Easy Ecom</Badge> : o.ee_file_at && <Badge tone="amber">In a file</Badge>}
                     </div>
                     {p.map((x) => <div key={x} className="text-sm text-red-700">⚠ {x}{x.startsWith('Not in') && <> · <Link to="/products" className="underline">Products</Link></>}</div>)}
                   </div>

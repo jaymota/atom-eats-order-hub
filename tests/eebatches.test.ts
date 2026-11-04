@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { batches, inSalesReport, type EeOrder } from '../src/lib/easyecom'
+import { OFFLINE_HEAD, awbOf, batches, inSalesReport, offlineRows, phone10, type EeOrder } from '../src/lib/easyecom'
 
 const o = (order_no: string, qty: number, invoice_no: string | null = null) =>
   ({ id: order_no, order_no, invoice_no, order_lines: [{ line_no: 1, sku: 'TPC01', qty }] }) as unknown as EeOrder
@@ -23,5 +23,25 @@ describe('inSalesReport', () => {
       { 'Reference Code': '`B2B/AT/01254/2026-28', 'MP Ref No': '' },
     ]
     expect(inSalesReport(orders, rows).map((x) => x.order_no)).toEqual(['ORD-00042', 'ORD-00032'])
+  })
+})
+
+describe('Shipped upload clean-up (Easy Ecom error report, 4 Nov)', () => {
+  const base = (x: Partial<EeOrder>) => ({ id: x.order_no, order_no: 'ORD-1', order_date: '2026-11-01', customer_name: 'A', same_as_billing: true, phone: null, tracking_no: null,
+    invoice_no: 'AT/1', payment_type: 'Credit', order_lines: [{ line_no: 1, sku: 'TPC01', qty: 1, rate: 10 }], ...x }) as unknown as EeOrder
+  const col = (name: string) => OFFLINE_HEAD.indexOf(name)
+  it('phones become 10 digits', () => {
+    expect(phone10('+91 98194 55288')).toBe('9819455288')
+    expect(phone10('092234 87644')).toBe('9223487644')
+    expect(phone10('9482490100')).toBe('9482490100')
+  })
+  it('tracking is letters and digits only, and never text like SELF COLLECTED', () => {
+    expect(awbOf('\tCRN788797561050')).toBe('CRN788797561050')
+    expect(awbOf('SELF COLLECTED')).toBe('')
+  })
+  it('an AWB shared by two orders in one file is left out', () => {
+    const r = offlineRows([base({ order_no: 'ORD-54', tracking_no: 'D123456' }), base({ order_no: 'ORD-58', tracking_no: 'D123456' }), base({ order_no: 'ORD-60', tracking_no: 'D999999', phone: '+91 62027 91376' })])
+    expect(r.slice(1).map((x) => x[col('Tracking Number')])).toEqual(['', '', 'D999999'])
+    expect(r[3][col('Billing Address Phone')]).toBe('6202791376')
   })
 })

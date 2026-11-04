@@ -83,17 +83,27 @@ export const OFFLINE_HEAD = ['Channel Name*', 'Sale Order Item Code*', 'Display 
 const offlinePayment = (t: string | null) => (t === 'COD' ? 'COD' : t === 'FOC' ? 'FOC' : 'Prepaid')
 
 /** The import has no quantity column: each row is one unit, so 10 packs = 10 rows with their own item code. */
+/** Easy Ecom wants a phone of at most 10 characters: the last 10 digits ("+91 98194 55288" → 9819455288). */
+export const phone10 = (p: string | null | undefined) => { const d = (p ?? '').replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d }
+/** An AWB is letters and digits only; text like "SELF COLLECTED" (no digits) is not one, so it's left out. */
+export const awbOf = (t: string | null | undefined) => { const a = (t ?? '').replace(/[^0-9A-Za-z]/g, ''); return /\d/.test(a) ? a : '' }
+
 export function offlineRows(orders: EeOrder[]): unknown[][] {
   const rows: unknown[][] = [OFFLINE_HEAD]
+  // Easy Ecom refuses the same AWB on two orders in one file (one Porter trip for two orders): leave it out then.
+  const awbOrders = new Map<string, Set<string>>()
+  for (const o of orders) { const a = awbOf(o.tracking_no); if (a) awbOrders.set(a, (awbOrders.get(a) ?? new Set()).add(o.order_no)) }
   for (const o of orders) {
+    const awb = awbOf(o.tracking_no)
+    const tracking = awb && awbOrders.get(awb)!.size === 1 ? awb : ''
     const s = shipTo(o)
     const pay = offlinePayment(o.payment_type)
     // Shipping and packaging charges stay in the Hub and Tally: never sent to Easy Ecom.
     for (const l of o.order_lines) for (let u = 1; u <= l.qty; u++) {
       rows.push(['Offline', `\`${o.order_no}-${l.line_no}-${u}`, o.order_no, price(l.rate ?? 0), '', '', '', 1, o.order_date, l.sku, 'N', o.courier ?? '',
-        s.name, s.phone ?? '', o.email ?? '', s.address ?? '', '', s.city ?? '', s.state ?? '', 'India', s.pin ?? '', '',
-        o.customer_name, o.billing_address ?? '', '', o.billing_city ?? '', o.billing_state ?? '', 'India', o.billing_pin ?? '', o.phone ?? '',
-        o.invoice_no ?? '', o.tracking_no ?? '', pay, '', o.gstin ?? '', 'Yes', pay === 'COD' ? price(l.rate ?? 0) : ''])
+        s.name, phone10(s.phone), o.email ?? '', s.address ?? '', '', s.city ?? '', s.state ?? '', 'India', s.pin ?? '', '',
+        o.customer_name, o.billing_address ?? '', '', o.billing_city ?? '', o.billing_state ?? '', 'India', o.billing_pin ?? '', phone10(o.phone),
+        o.invoice_no ?? '', tracking, pay, '', o.gstin ?? '', 'Yes', pay === 'COD' ? price(l.rate ?? 0) : ''])
     }
   }
   return rows

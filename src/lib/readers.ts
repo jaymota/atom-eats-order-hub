@@ -22,6 +22,44 @@ export async function readImage(file: Blob, onProgress?: Progress): Promise<{ te
   }
 }
 
+/** Reads shipping label photos: barcodes (ZXing, exact) and the printed text (Tesseract), one reader
+ *  for all the photos so a day's batch is quick. */
+export async function readLabels(files: Blob[], onProgress?: Progress, again?: (text: string, barcodes: string[]) => boolean): Promise<{ text: string; barcodes: string[] }[]> {
+  const [{ createWorker }, { readBarcodes, prepareZXingModule }, { default: wasmUrl }] = await Promise.all([
+    import('tesseract.js'), import('zxing-wasm/reader'), import('zxing-wasm/reader/zxing_reader.wasm?url'),
+  ])
+  prepareZXingModule({ overrides: { locateFile: (path: string, prefix: string) => (path.endsWith('.wasm') ? wasmUrl : prefix + path) } })
+  onProgress?.('Getting the reader ready…', 0)
+  const worker = await createWorker('eng')
+  const out: { text: string; barcodes: string[] }[] = []
+  try {
+    for (const [i, f] of files.entries()) {
+      onProgress?.(`Reading photo ${i + 1} of ${files.length}…`, i / files.length)
+      const bmp = await createImageBitmap(f)
+      const canvas = document.createElement('canvas')
+      canvas.width = bmp.width; canvas.height = bmp.height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(bmp, 0, 0)
+      const found = await readBarcodes(ctx.getImageData(0, 0, bmp.width, bmp.height), { tryHarder: true, formats: ['Code128', 'Code39', 'Code93', 'ITF'] }).catch(() => [])
+      const barcodes = found.map((b) => b.text)
+      let { text } = (await worker.recognize(f)).data
+      // Unclear photo: read a grey copy at twice the size too (slower, so only when needed).
+      if (again?.(text, barcodes)) {
+        const big = document.createElement('canvas')
+        big.width = bmp.width * 2; big.height = bmp.height * 2
+        const b = big.getContext('2d')!
+        b.filter = 'grayscale(1)'
+        b.drawImage(bmp, 0, 0, big.width, big.height)
+        text += `\n${(await worker.recognize(big)).data.text}`
+      }
+      out.push({ text, barcodes })
+    }
+  } finally {
+    await worker.terminate()
+  }
+  return out
+}
+
 /** pdf.js, the "legacy" build: the normal one needs very new browsers (e.g. Uint8Array.toHex) and
  *  fails on older phones and laptops with "a.toHex is not a function". */
 async function loadPdfjs() {

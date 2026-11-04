@@ -1,10 +1,12 @@
-// atomeats.com (Shopify) orders, copied in every 15 minutes. View-only: they go to Easy Ecom from
-// Shopify itself, so nothing here is uploaded or changed.
+// atomeats.com (Shopify) orders, copied in every 15 minutes. They go to Easy Ecom from Shopify itself;
+// the only thing sent back is tracking, when Easy Ecom didn't (TrackingTools).
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, ErrorBox, Input } from '../components/ui'
+import TrackingTools, { OneTracking } from '../components/TrackingTools'
+import { useAuth } from '../lib/auth'
 import { fetchAll } from '../lib/catalog'
 import { ago } from '../lib/format'
-import { rupees } from '../lib/stages'
+import { can, rupees } from '../lib/stages'
 
 interface Row {
   id: number; name: string; ordered_at: string; customer: string | null; city: string | null; total: number
@@ -17,6 +19,7 @@ const tabOf = (r: Row): Tab => (r.cancelled ? 'cancelled' : r.lines.some((l) => 
 const word = (s: string | null) => (s ?? '').toLowerCase().replace(/_/g, ' ')
 
 export default function OnlineOrders() {
+  const { me } = useAuth()
   const [rows, setRows] = useState<Row[] | null>(null)
   const [known, setKnown] = useState<Set<string>>(new Set())
   const [tab, setTab] = useState<Tab>('open')
@@ -46,6 +49,8 @@ export default function OnlineOrders() {
     const q = find.trim().toLowerCase()
     return (rows ?? []).filter((r) => tabOf(r) === tab && (!q || `${r.name} ${r.customer ?? ''} ${r.city ?? ''} ${r.lines.map((l) => `${l.sku} ${l.title}`).join(' ')}`.toLowerCase().includes(q)))
   }, [rows, tab, find])
+  const toShip = useMemo(() => (rows ?? []).filter((r) => tabOf(r) === 'open').map((r) => ({ id: r.id, name: r.name, customer: r.customer, city: r.city })), [rows])
+  const mayFulfil = can.dispatch(me?.role)
   const last = rows?.reduce((m, r) => (r.synced_at > m ? r.synced_at : m), '')
 
   return (
@@ -63,6 +68,7 @@ export default function OnlineOrders() {
         <span className="text-xs text-stone-500">atomeats.com · {last ? `updated ${ago(last)}` : 'not linked yet'}</span>
         <Button tone="plain" className="min-h-9 px-3 text-sm" disabled={busy} onClick={refresh}>{busy ? 'Updating…' : 'Update now'}</Button>
       </div>
+      {tab === 'open' && mayFulfil && rows && <TrackingTools open={toShip} onDone={load} />}
       <ErrorBox>{error}</ErrorBox>
       {!rows ? <p className="text-sm text-stone-500">Loading…</p> : !list.length ? <Card><p className="text-stone-600">Nothing here.</p></Card> : (
         <ul className="space-y-2">
@@ -86,6 +92,7 @@ export default function OnlineOrders() {
                     </li>
                   ))}
                 </ul>
+                {tab === 'open' && mayFulfil && <OneTracking id={r.id} onDone={load} />}
               </Card>
             </li>
           ))}

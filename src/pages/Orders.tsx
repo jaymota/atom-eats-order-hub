@@ -22,6 +22,7 @@ export interface OrderRow {
   invoice_value: number | null
   invoice_no: string | null
   po_number: string | null
+  po_generated?: boolean
   courier: string | null
   tracking_no: string | null
   missing: string[]
@@ -29,7 +30,7 @@ export interface OrderRow {
   order_lines: { product_name: string | null; qty: number }[]
 }
 
-export const ORDER_LIST_COLS = 'id, order_no, order_date, received_at, stage, channel, customer_name, billing_city, delivery_city, estimate_value, invoice_value, invoice_no, po_number, courier, tracking_no, missing, salesperson_id, order_lines(product_name, qty)'
+export const ORDER_LIST_COLS = 'id, order_no, order_date, received_at, stage, channel, customer_name, billing_city, delivery_city, estimate_value, invoice_value, invoice_no, po_number, po_generated, courier, tracking_no, missing, salesperson_id, order_lines(product_name, qty)'
 
 export function StageBadge({ stage }: { stage: Stage }) {
   return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${STAGE_TONE[stage]}`}>{STAGE_LABEL[stage]}</span>
@@ -130,7 +131,7 @@ export default function Orders({ embedded = false }: { embedded?: boolean }) {
                       <span className="font-semibold text-stone-900">{r.customer_name}</span>
                       <StageBadge stage={r.stage} />
                     </div>
-                    <div className="text-xs text-stone-500">{r.order_no} · {r.channel} · {r.delivery_city ?? r.billing_city ?? ''} · {rupees(r.invoice_value ?? r.estimate_value)}</div>
+                    <div className="text-xs text-stone-500">{r.order_no}{r.po_number && !r.po_generated && <> · <b className="text-stone-700">PO {r.po_number}</b></>} · {r.channel} · {r.delivery_city ?? r.billing_city ?? ''} · {rupees(r.invoice_value ?? r.estimate_value)}</div>
                     <div className="text-sm text-stone-700">{itemsShort(r.order_lines)}</div>
                     <div className="flex flex-wrap gap-1.5">
                       <span className={`text-xs font-semibold ${late ? 'text-red-700' : 'text-stone-500'}`}>{late ? 'LATE · ' : ''}{age(r.received_at)}</span>
@@ -145,7 +146,7 @@ export default function Orders({ embedded = false }: { embedded?: boolean }) {
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-ae-cream/60 text-xs uppercase text-stone-500">
-                <tr>{['Order', 'Date', 'Channel', 'Customer', 'City', 'Items', 'Value', 'Stage', 'Invoice', 'Dispatch', 'Age'].map((h) => <th key={h} className="px-3 py-2 font-semibold">{h}</th>)}</tr>
+                <tr>{['Order', 'PO', 'Date', 'Channel', 'Customer', 'City', 'Items', 'Value', 'Stage', 'Invoice', 'Dispatch', 'Age'].map((h) => <th key={h} className="px-3 py-2 font-semibold">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {list.map((r) => {
@@ -153,6 +154,7 @@ export default function Orders({ embedded = false }: { embedded?: boolean }) {
                   return (
                     <tr key={r.id} className="hover:bg-ae-cream/40">
                       <td className="px-3 py-2"><Link to={`/orders/${r.id}`} className="font-semibold text-ae-blue underline">{r.order_no}</Link></td>
+                      <td className="px-3 py-2">{r.po_number && !r.po_generated ? r.po_number : <span className="text-stone-400">—</span>}</td>
                       <td className="whitespace-nowrap px-3 py-2">{new Date(r.order_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</td>
                       <td className="px-3 py-2">{r.channel}</td>
                       <td className="px-3 py-2 font-semibold">{r.customer_name}{r.missing.length > 0 && <span className="ml-1"><Badge tone="amber">Missing {r.missing.length}</Badge></span>}</td>

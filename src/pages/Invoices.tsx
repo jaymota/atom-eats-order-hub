@@ -9,7 +9,7 @@ import { rupees, todayIST } from '../lib/stages'
 
 interface Inv {
   id: string; order_no: string; invoice_no: string; invoice_date: string; invoice_value: number
-  customer_name: string; gstin: string | null; channel: string; stage: string; dispatch_date: string | null; courier: string | null; tracking_no: string | null
+  customer_name: string; gstin: string | null; channel: string; po_number: string | null; po_generated: boolean; stage: string; dispatch_date: string | null; courier: string | null; tracking_no: string | null
 }
 
 const sent = (r: Inv) => ['dispatched', 'delivered'].includes(r.stage)
@@ -24,7 +24,7 @@ export default function Invoices() {
   const [status, setStatus] = useState('')
 
   useEffect(() => {
-    fetchAll<Inv>('orders', 'id, order_no, invoice_no, invoice_date, invoice_value, customer_name, gstin, channel, stage, dispatch_date, courier, tracking_no',
+    fetchAll<Inv>('orders', 'id, order_no, invoice_no, invoice_date, invoice_value, customer_name, gstin, channel, po_number, po_generated, stage, dispatch_date, courier, tracking_no',
       (x) => x.not('invoice_no', 'is', null).neq('stage', 'cancelled').order('invoice_date', { ascending: false }).order('invoice_no', { ascending: false })).then(setRows)
   }, [])
 
@@ -34,7 +34,7 @@ export default function Invoices() {
     if (channel && r.channel !== channel) return false
     if (status === 'waiting' && sent(r)) return false
     if (status === 'sent' && !sent(r)) return false
-    if (q && !norm(`${r.invoice_no} ${r.order_no} ${r.customer_name} ${r.tracking_no ?? ''}`).includes(norm(q))) return false
+    if (q && !norm(`${r.invoice_no} ${r.order_no} ${r.po_number ?? ''} ${r.customer_name} ${r.tracking_no ?? ''}`).includes(norm(q))) return false
     return true
   }), [rows, q, from, to, channel, status])
   const total = list.reduce((s, r) => s + Number(r.invoice_value), 0)
@@ -44,7 +44,7 @@ export default function Invoices() {
     const X = await import('xlsx')
     const ws = X.utils.json_to_sheet(list.map((r) => ({
       'Invoice no.': r.invoice_no, 'Invoice date': r.invoice_date, 'Value': Number(r.invoice_value), 'Customer': r.customer_name, 'GSTIN': r.gstin ?? '',
-      'Channel': r.channel, 'Order no.': r.order_no,
+      'Channel': r.channel, 'Order no.': r.order_no, 'PO no.': r.po_generated ? '' : r.po_number ?? '',
       'Dispatched': sent(r) ? 'Yes' : 'Not yet', 'Dispatch date': r.dispatch_date ?? '', 'Courier': r.courier ?? '', 'Tracking': r.tracking_no ?? '',
     })))
     const wb = X.utils.book_new()
@@ -74,12 +74,13 @@ export default function Invoices() {
         <Card className="overflow-x-auto p-0 sm:p-0">
           <table className="w-full text-left text-sm">
             <thead className="bg-ae-cream/60 text-xs uppercase text-stone-500">
-              <tr>{['Invoice', 'Date', 'Customer', 'Value', 'Dispatch'].map((h) => <th key={h} className="whitespace-nowrap px-3 py-2">{h}</th>)}</tr>
+              <tr>{['Invoice', 'PO', 'Date', 'Customer', 'Value', 'Dispatch'].map((h) => <th key={h} className="whitespace-nowrap px-3 py-2">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {list.map((r) => (
                 <tr key={r.id}>
                   <td className="whitespace-nowrap px-3 py-2"><Link to={`/orders/${r.id}`} className="font-semibold text-ae-blue underline">{r.invoice_no}</Link></td>
+                  <td className="px-3 py-2">{r.po_number && !r.po_generated ? r.po_number : <span className="text-stone-400">—</span>}</td>
                   <td className="whitespace-nowrap px-3 py-2">{day(r.invoice_date)}</td>
                   <td className="px-3 py-2">{r.customer_name}<div className="text-xs text-stone-500">{r.channel}</div></td>
                   <td className="whitespace-nowrap px-3 py-2">{rupees(r.invoice_value)}</td>
@@ -87,7 +88,7 @@ export default function Invoices() {
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr className="border-t-2 border-stone-200 font-semibold"><td className="px-3 py-2" colSpan={3}>Total</td><td className="whitespace-nowrap px-3 py-2">{rupees(total)}</td><td /></tr></tfoot>
+            <tfoot><tr className="border-t-2 border-stone-200 font-semibold"><td className="px-3 py-2" colSpan={4}>Total</td><td className="whitespace-nowrap px-3 py-2">{rupees(total)}</td><td /></tr></tfoot>
           </table>
         </Card>
       )}

@@ -98,12 +98,14 @@ export function offlineRows(orders: EeOrder[]): unknown[][] {
     const tracking = awb && awbOrders.get(awb)!.size === 1 ? awb : ''
     const s = shipTo(o)
     const pay = offlinePayment(o.payment_type)
-    // Shipping and packaging charges stay in the Hub and Tally: never sent to Easy Ecom.
-    for (const l of o.order_lines) for (let u = 1; u <= l.qty; u++) {
-      rows.push(['Offline', `\`${o.order_no}-${l.line_no}-${u}`, o.order_no, price(l.rate ?? 0), '', '', '', 1, o.order_date, l.sku, 'N', o.courier ?? '',
+    // One row per product line: Packet Number is the quantity (Easy Ecom support, 4 Nov) and Total Price
+    // the line's value. Shipping and packaging charges stay in the Hub and Tally: never sent to Easy Ecom.
+    for (const l of o.order_lines) {
+      const total = price((l.rate ?? 0) * l.qty)
+      rows.push(['Offline', `\`${o.order_no}-${l.line_no}`, o.order_no, total, '', '', '', l.qty, o.order_date, l.sku, 'N', o.courier ?? '',
         s.name, phone10(s.phone), o.email ?? '', s.address ?? '', '', s.city ?? '', s.state ?? '', 'India', s.pin ?? '', '',
         o.customer_name, o.billing_address ?? '', '', o.billing_city ?? '', o.billing_state ?? '', 'India', o.billing_pin ?? '', phone10(o.phone),
-        o.invoice_no ?? '', tracking, pay, '', o.gstin ?? '', 'Yes', pay === 'COD' ? price(l.rate ?? 0) : ''])
+        o.invoice_no ?? '', tracking, pay, '', o.gstin ?? '', 'Yes', pay === 'COD' ? total : ''])
     }
   }
   return rows
@@ -212,14 +214,14 @@ export function masterRows(orders: EeOrder[], people: Map<string, string>): Reco
   })
 }
 
-/** Easy Ecom takes under 2,000 rows per upload, and the Shipped format is one row per unit. Splits the
- *  orders into files of at most `max` rows, each order whole (biggest first, so the parts stay few). */
+/** Easy Ecom takes under 2,000 rows per upload (one row per product line). Splits the orders into files of
+ *  at most `max` rows, each order whole (biggest first, so the parts stay few). Rarely more than one file now. */
 export const MAX_ROWS = 1900
-export const unitsOf = (o: EeOrder) => o.order_lines.reduce((t, l) => t + l.qty, 0)
+export const rowsOf = (o: EeOrder) => o.order_lines.length
 export function batches(orders: EeOrder[], max = MAX_ROWS): EeOrder[][] {
   const parts: { rows: number; orders: EeOrder[] }[] = []
-  for (const o of [...orders].sort((a, b) => unitsOf(b) - unitsOf(a))) {
-    const n = unitsOf(o)
+  for (const o of [...orders].sort((a, b) => rowsOf(b) - rowsOf(a))) {
+    const n = rowsOf(o)
     const p = parts.find((x) => x.rows + n <= max)
     if (p) { p.rows += n; p.orders.push(o) } else parts.push({ rows: n, orders: [o] })
   }

@@ -19,11 +19,13 @@ describe('Easy Ecom files', () => {
     expect(r[0]).toEqual(WHOLESALE_HEAD)
     expect(r[1]).toEqual(['EE77', 'B2B/AT/0988/2026-27', 'ORD-00009-1', 'TPC01', 3, '100.00', '`2026-10-28', 'Prepaid', '', '125.00'])
   })
-  it('offline import: one row per unit, Credit becomes Prepaid', () => {
+  it('offline import: one row per product line, quantity in Packet Number, line value in Total Price', () => {
     const r = offlineRows([o()])
     expect(r[0]).toEqual(OFFLINE_HEAD)
-    expect(r.length).toBe(4)
-    expect(r[3][1]).toBe('`ORD-00009-1-3')
+    expect(r.length).toBe(2)
+    expect(r[1][1]).toBe('`ORD-00009-1')
+    expect(r[1][OFFLINE_HEAD.indexOf('Packet Number*')]).toBe(3)
+    expect(r[1][OFFLINE_HEAD.indexOf('Total Price*')]).toBe('300.00')
     expect(r[1][OFFLINE_HEAD.indexOf('Payment Type*')]).toBe('Prepaid')
     expect(r[1][OFFLINE_HEAD.indexOf('Invoice Code')]).toBe('AT/0988/2026-27')
   })

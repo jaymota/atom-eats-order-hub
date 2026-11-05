@@ -6,7 +6,7 @@ import EeSetup from '../components/EeSetup'
 import { Badge, Button, Card, ErrorBox, Input, OkBox, Select } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { fetchAll } from '../lib/catalog'
-import { MAX_ROWS, batches, inSalesReport, masterRows, offlineRows, problems, toCsv, unitsOf, type EeOrder } from '../lib/easyecom'
+import { MAX_ROWS, batches, inSalesReport, masterRows, offlineRows, problems, toCsv, rowsOf, type EeOrder } from '../lib/easyecom'
 import { rupees, todayIST } from '../lib/stages'
 import { supabase } from '../lib/supabase'
 import { StageBadge } from './Orders'
@@ -166,7 +166,7 @@ export default function Downloads() {
               return (
                 <li key={i} className="flex flex-wrap items-center gap-2 py-2">
                   <Button tone="plain" className="min-h-10 px-3 text-sm" disabled={done} onClick={() => downloadPart(p, `-part${i + 1}of${parts.length}`)}>⬇ Part {i + 1} of {parts.length}</Button>
-                  <span className="text-sm text-stone-600">{p.length} orders · {p.reduce((t, o) => t + unitsOf(o), 0)} rows</span>
+                  <span className="text-sm text-stone-600">{p.length} orders · {p.reduce((t, o) => t + rowsOf(o), 0)} rows</span>
                   {done ? <Badge tone="green">Uploaded</Badge> : <Button className="ml-auto min-h-10 px-3 text-sm" disabled={busy} onClick={() => rpc('mark_ee_uploaded', { p_ids: p.map((o) => o.id) }, 'N marked as uploaded.')}>✓ Part {i + 1} uploaded</Button>}
                 </li>
               )

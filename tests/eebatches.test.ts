@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { OFFLINE_HEAD, awbOf, batches, inSalesReport, offlineRows, phone10, type EeOrder } from '../src/lib/easyecom'
 
-const o = (order_no: string, qty: number, invoice_no: string | null = null) =>
-  ({ id: order_no, order_no, invoice_no, order_lines: [{ line_no: 1, sku: 'TPC01', qty }] }) as unknown as EeOrder
+const o = (order_no: string, lines: number, invoice_no: string | null = null) =>
+  ({ id: order_no, order_no, invoice_no, order_lines: Array.from({ length: lines }, (_, i) => ({ line_no: i + 1, sku: 'TPC01', qty: 5 })) }) as unknown as EeOrder
 
 describe('batches', () => {
-  it('keeps each order whole and every file under the limit', () => {
+  it('keeps each order whole and every file under the limit (rows = product lines)', () => {
     const parts = batches([o('ORD-1', 640), o('ORD-2', 288), o('ORD-3', 1100), o('ORD-4', 16)], 1000)
     expect(parts.map((p) => p.map((x) => x.order_no))).toEqual([['ORD-3'], ['ORD-1', 'ORD-2', 'ORD-4']])
   })
